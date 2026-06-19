@@ -7,6 +7,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 :root {
@@ -134,6 +135,21 @@ tbody tr:hover td{background:var(--bg)}
 .mobile-nav-btn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 8px;border:none;background:transparent;color:#64748b;font-size:9px;font-weight:700;cursor:pointer;border-radius:8px;font-family:'Inter',sans-serif;min-width:48px}
 .mobile-nav-btn.active{color:var(--purple);background:var(--purple-light)}
 .mobile-nav-btn .mn-icon{font-size:20px}
+/* Dark mode */
+[data-theme="dark"]{--bg:#0f172a;--surface:#1e293b;--card:#263148;--border:#334155;--text:#f1f5f9;--text2:#cbd5e1;--muted:#94a3b8;--faint:#64748b;--purple-light:#2d1b3d;--purple-mid:#7c3aed;--teal-light:#0f2d28;--red-light:#2d0f0f;--amber-light:#2d1f0f;--blue-light:#0f1f3d;}
+[data-theme="dark"] body{background:var(--bg);color:var(--text)}
+[data-theme="dark"] .sidebar,[data-theme="dark"] .topbar,[data-theme="dark"] .panel,[data-theme="dark"] .kpi-card,[data-theme="dark"] .prod-card,[data-theme="dark"] .deuda-card,[data-theme="dark"] .login-box,[data-theme="dark"] .modal,[data-theme="dark"] #mobile-nav,[data-theme="dark"] .role-btn,[data-theme="dark"] .carrito-item,[data-theme="dark"] .stat-mini{background:var(--surface)!important;border-color:var(--border)!important}
+[data-theme="dark"] input,[data-theme="dark"] select,[data-theme="dark"] textarea{background:var(--card)!important;color:var(--text)!important;border-color:var(--border)!important}
+[data-theme="dark"] .toast{background:var(--surface);border:1px solid var(--border);color:var(--text)}
+[data-theme="dark"] tbody tr:hover td{background:var(--card)}
+[data-theme="dark"] thead th{color:var(--muted)}
+[data-theme="dark"] tbody td{color:var(--text)}
+[data-theme="dark"] .nav-btn:hover{background:var(--card)}
+[data-theme="dark"] .login-screen{background:linear-gradient(135deg,#1a0d2e,#0a1f1a)}
+[data-theme="dark"] .total-box{background:linear-gradient(135deg,#2d1b3d,#0f2d28)}
+.dark-toggle{background:none;border:none;color:var(--faint);cursor:pointer;font-size:16px;padding:4px;border-radius:6px;transition:all .12s}
+.dark-toggle:hover{color:var(--text);background:var(--bg)}
+.stock-alert-banner{background:var(--amber-light);border:1.5px solid #fde68a;border-radius:12px;padding:12px 18px;margin-bottom:18px;display:flex;align-items:flex-start;gap:10px;font-size:13px;font-weight:600;color:var(--amber);flex-wrap:wrap}
 @media screen and (max-width:768px){
   .sidebar{display:none!important}
   .main{margin-left:0!important}
@@ -156,13 +172,12 @@ tbody tr:hover td{background:var(--bg)}
 
 <div class="login-screen" id="loginScreen">
   <div class="login-box">
-    <div class="login-logo-wrap">
-      <svg width="40" height="40" viewBox="0 0 80 80" fill="none">
-        <rect x="34" y="50" width="12" height="24" rx="6" fill="#7B2D8B"/>
-        <path d="M40 48 Q24 34 16 20 Q30 24 40 40 Q50 24 64 20 Q56 34 40 48Z" fill="#7B2D8B"/>
-        <circle cx="18" cy="16" r="8" fill="#3DBFA0"/><circle cx="32" cy="8" r="8" fill="#3DBFA0"/>
-        <circle cx="48" cy="6" r="8" fill="#3DBFA0"/><circle cx="62" cy="14" r="8" fill="#3DBFA0"/>
-        <circle cx="25" cy="30" r="6" fill="#3DBFA0"/><circle cx="55" cy="28" r="6" fill="#3DBFA0"/>
+    <div class="login-logo-wrap" style="flex-direction:column;gap:6px">
+      <svg width="72" height="82" viewBox="0 0 88 105" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M44 4 C44 4 18 30 18 54 C18 70 29 82 44 85 C59 82 70 70 70 54 C70 30 44 4 44 4Z" fill="#3B2B96"/>
+        <path d="M44 16 C44 16 40 42 42 64" stroke="rgba(255,255,255,0.38)" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+        <path d="M8 90 C20 79 32 101 44 90 C56 79 68 101 80 90" stroke="#3B2B96" stroke-width="6.5" stroke-linecap="round" fill="none"/>
+        <path d="M8 97 C20 86 32 108 44 97 C56 86 68 108 80 97" stroke="#2dbd6e" stroke-width="3" stroke-linecap="round" fill="none"/>
       </svg>
       <div class="login-brand">Nutri<span>Wave</span></div>
     </div>
@@ -200,12 +215,11 @@ tbody tr:hover td{background:var(--bg)}
 <aside class="sidebar" id="sidebar" style="display:none">
   <div class="sidebar-logo">
     <div class="logo-wrap">
-      <svg width="32" height="32" viewBox="0 0 80 80" fill="none">
-        <rect x="34" y="50" width="12" height="24" rx="6" fill="#7B2D8B"/>
-        <path d="M40 48 Q24 34 16 20 Q30 24 40 40 Q50 24 64 20 Q56 34 40 48Z" fill="#7B2D8B"/>
-        <circle cx="18" cy="16" r="8" fill="#3DBFA0"/><circle cx="32" cy="8" r="8" fill="#3DBFA0"/>
-        <circle cx="48" cy="6" r="8" fill="#3DBFA0"/><circle cx="62" cy="14" r="8" fill="#3DBFA0"/>
-        <circle cx="25" cy="30" r="6" fill="#3DBFA0"/><circle cx="55" cy="28" r="6" fill="#3DBFA0"/>
+      <svg width="32" height="36" viewBox="0 0 88 105" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M44 4 C44 4 18 30 18 54 C18 70 29 82 44 85 C59 82 70 70 70 54 C70 30 44 4 44 4Z" fill="#3B2B96"/>
+        <path d="M44 16 C44 16 40 42 42 64" stroke="rgba(255,255,255,0.38)" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+        <path d="M8 90 C20 79 32 101 44 90 C56 79 68 101 80 90" stroke="#3B2B96" stroke-width="6.5" stroke-linecap="round" fill="none"/>
+        <path d="M8 97 C20 86 32 108 44 97 C56 86 68 108 80 97" stroke="#2dbd6e" stroke-width="3" stroke-linecap="round" fill="none"/>
       </svg>
       <div><div class="logo-name">Nutri<span>Wave</span></div><div class="logo-sub">Gestión Interna</div></div>
     </div>
@@ -214,7 +228,10 @@ tbody tr:hover td{background:var(--bg)}
   <nav class="sidebar-nav" id="sidebarNav"></nav>
   <div class="sidebar-footer">
     <span class="clock-txt" id="sidebarClock">—</span>
-    <button class="logout-btn" onclick="logout()" title="Cerrar sesión">⏏</button>
+    <div style="display:flex;gap:4px;align-items:center">
+      <button class="dark-toggle" id="darkToggle" onclick="toggleDark()" title="Modo oscuro">🌙</button>
+      <button class="logout-btn" onclick="logout()" title="Cerrar sesión">⏏</button>
+    </div>
   </div>
 </aside>
 
@@ -371,7 +388,7 @@ function enterApp(role){
     const page=b.id.replace('mn-','');
     b.style.display=(!b.id||pages.includes(page))?'flex':'none';
   });
-  buildNav();goTo('dashboard');
+  initDarkMode();buildNav();goTo('dashboard');
 }
 
 function logout(){
@@ -442,6 +459,8 @@ function tick(){
   const td=document.getElementById('topDate');if(td)td.textContent=now.toLocaleDateString('es-BO',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
 }
 tick();setInterval(tick,30000);
+// Aplicar tema guardado al cargar (antes del login)
+(function(){const t=localStorage.getItem('nw-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();
 function todayStr(){
   const now=new Date();
   const y=now.getFullYear();
@@ -508,6 +527,15 @@ function renderDashboard(fechaVer){
     movs.sort((a,b)=>((b.fecha||'')+(b.hora||'')).localeCompare((a.fecha||'')+(a.hora||'')));
     console.log('Movimientos de hoy ('+hoy+'):', movs.length);
     const stock=stockSnap.val()||{};
+    const stockAgotado=PRODUCTOS.filter(p=>p.id!=='folletos'&&(stock[p.id]||0)<=0);
+    const stockBajo=PRODUCTOS.filter(p=>p.id!=='folletos'&&(stock[p.id]||0)>0&&(stock[p.id]||0)<=5);
+    let alertaBanner='';
+    if(stockAgotado.length||stockBajo.length){
+      const msgs=[];
+      if(stockAgotado.length)msgs.push(`<strong>⛔ Sin stock:</strong> ${stockAgotado.map(p=>p.emoji+' '+p.nombre).join(', ')}`);
+      if(stockBajo.length)msgs.push(`<strong>⚠️ Stock bajo:</strong> ${stockBajo.map(p=>p.emoji+' '+p.nombre+' ('+(stock[p.id]||0)+' ud.)').join(', ')}`);
+      alertaBanner=`<div class="stock-alert-banner"><span style="flex:1">${msgs.join(' &nbsp;·&nbsp; ')}</span><a onclick="goTo('stock')" style="cursor:pointer;text-decoration:underline;white-space:nowrap">Ver stock →</a></div>`;
+    }
     const allEntradas=[];entSnap.forEach(s=>{const v=s.val();if(v)allEntradas.push({...v,_key:s.key});});
     const entradasHoy=allEntradas.filter(e=>e.fecha===hoy);
     const allApartados=[];apartSnap.forEach(s=>{const v=s.val();if(v)allApartados.push({...v,_key:s.key});});
@@ -557,7 +585,7 @@ function renderDashboard(fechaVer){
       });
     });
     const movsDisplay=movs.filter(m=>m.tipo!=='pago-deuda');
-    c.innerHTML=`
+    c.innerHTML=`${alertaBanner}
       <div style="background:#fff;border:1.5px solid var(--purple-mid);border-radius:12px;padding:12px 14px;margin-bottom:18px;display:flex;align-items:center;flex-wrap:wrap;gap:10px;justify-content:space-between;box-shadow:var(--shadow)">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:1;min-width:0">
           <button class="btn btn-primary btn-sm" onclick="renderDashboard(prevDay('${hoy}'))">← Día anterior</button>
@@ -576,6 +604,10 @@ function renderDashboard(fechaVer){
         ${apartadosPendientes>0?`<div class="kpi-card" style="cursor:pointer;border-color:var(--amber)" onclick="goTo('apartados')"><div class="kpi-icon">📌</div><div class="kpi-label">Apartados pendientes</div><div class="kpi-val" style="color:var(--amber)">${apartadosPendientes}</div><div class="kpi-sub">pendientes de entrega</div></div>`:''}
       </div>
       ${totalRegalias>0||unidadesRegalias>0?`<div style="background:var(--purple-light);border:1px solid var(--purple-mid);border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div><div style="font-size:11px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px">🎁 Regalías / Comisiones del día</div><div style="font-size:13px;color:var(--text2);font-weight:500">${unidadesRegalias} unidades entregadas — valor Bs. ${totalRegalias.toFixed(2)}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">No afecta caja · Solo descuenta inventario</div></div></div>`:''}
+      <div class="panel" style="margin-bottom:16px">
+        <div class="panel-header"><span class="panel-title">📈 Ingresos — últimos 7 días</span></div>
+        <canvas id="ventasChart" height="80"></canvas>
+      </div>
       <div class="panel" style="margin-bottom:16px">
         <div class="panel-header"><span class="panel-title">${esHoy?'Productos salidos hoy':'Productos salidos ese día'}</span></div>
         ${Object.keys(porProd).length?`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px">${Object.entries(porProd).sort((a,b)=>b[1]-a[1]).map(([id,cant])=>{const p=getProd(id);return`<div class="stat-mini"><div class="stat-mini-label">${p?p.emoji+' '+p.nombre:id}</div><div class="stat-mini-val" style="color:var(--purple)">${cant} <span style="font-size:13px;font-weight:600;color:var(--muted)">unidades</span></div></div>`;}).join('')}</div>`:'<div class="empty"><span class="empty-icon">📦</span><p>Sin productos salidos hoy</p></div>'}
@@ -608,6 +640,8 @@ function renderDashboard(fechaVer){
       </div>`;}).join('')}
     </div>`:''}
     `;
+    _lastAllMovs=allMovs;
+    initVentasChart(allMovs);
   });
 }
 
@@ -946,6 +980,7 @@ function renderMovimientos(){
             <option value="regalía">Regalías (histórico)</option>
           </select>
           <input type="date" id="filtro-fecha" value="" onchange="loadMovimientos()" style="font-size:12px;padding:6px 10px;border-radius:8px;width:auto" placeholder="Todas las fechas">
+          <input type="text" id="filtro-buscar" placeholder="🔍 Buscar socio o código..." oninput="loadMovimientos()" style="font-size:12px;padding:6px 10px;border-radius:8px;width:180px">
           <button class="btn btn-ghost btn-sm" onclick="exportMovCSV()">⬇ CSV</button>
         </div>
       </div>
@@ -958,6 +993,7 @@ function renderMovimientos(){
 function loadMovimientos(){
   const filtroTipo=document.getElementById('filtro-tipo')?.value;
   const filtroFecha=document.getElementById('filtro-fecha')?.value;
+  const filtroBuscar=(document.getElementById('filtro-buscar')?.value||'').toLowerCase().trim();
   const el=document.getElementById('mov-table');
   if(el)el.innerHTML='<div class="loading">⏳ Cargando...</div>';
   db.ref('movimientos').once('value').then(snap=>{
@@ -966,6 +1002,7 @@ function loadMovimientos(){
     console.log('Total movimientos en Firebase:', movs.length);
     if(filtroFecha)movs=movs.filter(m=>m.fecha===filtroFecha);
     if(filtroTipo)movs=movs.filter(m=>m.tipo===filtroTipo);
+    if(filtroBuscar)movs=movs.filter(m=>(m.nombre||'').toLowerCase().includes(filtroBuscar)||(m.codigo||'').toLowerCase().includes(filtroBuscar));
     movs.sort((a,b)=>((b.fecha||'')+(b.hora||'')).localeCompare((a.fecha||'')+(a.hora||'')));
     const el=document.getElementById('mov-table');if(!el)return;
     if(!movs.length){el.innerHTML='<div class="empty"><span class="empty-icon">📋</span><p>Sin movimientos.</p></div>';return;}
@@ -1345,6 +1382,47 @@ function exportTXT(){
   txt+=`Ingresos totales: Bs. ${ventasTxt.reduce((s,m)=>s+m.total,0).toFixed(2)}\n\n`;
   _repMovs.forEach(m=>{const items=m.items||(m.prodId?[{prodId:m.prodId,cant:m.cant}]:[]);const prodStr=m.tipo==='egreso'?m.descripcion||m.nota||'Egreso':items.map(i=>{const p=getProd(i.prodId);return p?p.nombre+' x'+i.cant:'—';}).join(', ');txt+=`${m.fecha} ${m.hora||''} | ${m.nombre||''} (${m.codigo||''}) | ${m.tipo} | ${prodStr} | Bs. ${(m.total||0).toFixed(2)} | ${m.metodo||''}\n`;});
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));a.download=`nutriwave-${_repDesde}-${_repHasta}.txt`;a.click();
+}
+
+// ── Modo oscuro ──────────────────────────────────────────────────────────────
+function initDarkMode(){
+  const saved=localStorage.getItem('nw-theme')||'light';
+  document.documentElement.setAttribute('data-theme',saved);
+  const btn=document.getElementById('darkToggle');
+  if(btn)btn.textContent=saved==='dark'?'☀️':'🌙';
+}
+function toggleDark(){
+  const curr=document.documentElement.getAttribute('data-theme')||'light';
+  const next=curr==='dark'?'light':'dark';
+  document.documentElement.setAttribute('data-theme',next);
+  localStorage.setItem('nw-theme',next);
+  const btn=document.getElementById('darkToggle');
+  if(btn)btn.textContent=next==='dark'?'☀️':'🌙';
+  if(document.getElementById('ventasChart'))initVentasChart(_lastAllMovs);
+}
+
+// ── Gráfica semanal ──────────────────────────────────────────────────────────
+let _ventasChart=null;
+let _lastAllMovs=[];
+function initVentasChart(allMovs){
+  const canvas=document.getElementById('ventasChart');
+  if(!canvas||typeof Chart==='undefined')return;
+  if(_ventasChart){_ventasChart.destroy();_ventasChart=null;}
+  const labels=[],data=[];
+  for(let i=6;i>=0;i--){
+    const d=new Date();d.setDate(d.getDate()-i);
+    const str=d.toISOString().slice(0,10);
+    labels.push(d.toLocaleDateString('es-BO',{weekday:'short',day:'numeric'}));
+    data.push(allMovs.filter(m=>m.fecha===str&&(m.tipo==='venta'||m.tipo==='apartado')).reduce((s,m)=>s+(m.total||0),0));
+  }
+  const isDark=document.documentElement.getAttribute('data-theme')==='dark';
+  const gridColor=isDark?'#334155':'#e2e8f0';
+  const tickColor=isDark?'#94a3b8':'#64748b';
+  _ventasChart=new Chart(canvas,{
+    type:'bar',
+    data:{labels,datasets:[{label:'Ingresos (Bs.)',data,backgroundColor:'rgba(123,45,139,0.75)',borderColor:'#7B2D8B',borderWidth:2,borderRadius:8,borderSkipped:false}]},
+    options:{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>'Bs. '+ctx.parsed.y.toFixed(2)}}},scales:{y:{beginAtZero:true,ticks:{font:{family:'JetBrains Mono',size:10},color:tickColor,callback:v=>'Bs.'+v},grid:{color:gridColor}},x:{ticks:{font:{size:11},color:tickColor},grid:{display:false}}}}
+  });
 }
 </script>
 </body>
