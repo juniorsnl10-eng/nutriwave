@@ -117,6 +117,7 @@ tbody tr:hover td{background:var(--bg)}
 .deuda-card.pendiente{border-left:4px solid var(--red)}
 .deuda-card.parcial{border-left:4px solid var(--amber)}
 .deuda-card.pagada{border-left:4px solid var(--teal);opacity:.75}
+.deuda-card.devuelta{border-left:4px solid var(--blue);opacity:.75}
 .empty{text-align:center;padding:40px 20px;color:var(--faint)}
 .empty-icon{font-size:32px;margin-bottom:8px;opacity:.4;display:block}
 .empty p{font-size:13px;font-weight:500}
@@ -304,6 +305,37 @@ tbody tr:hover td{background:var(--bg)}
   </div>
 </div>
 
+<div class="overlay" id="cambioOverlay" onclick="closeModal('cambioOverlay',event)">
+  <div class="modal" style="max-width:540px">
+    <div class="modal-title">🔄 Cambio de producto</div>
+    <div id="cambio-info" style="background:var(--bg);border-radius:10px;padding:14px;margin-bottom:16px;font-size:13px;border:1px solid var(--border)"></div>
+    <div id="cambio-item-wrap" style="margin-bottom:14px"></div>
+    <div class="form-row">
+      <div class="field"><label>Producto nuevo</label>
+        <select id="cambio-nuevo-prod" onchange="calcCambioDif()"><option value="">— Seleccionar —</option></select>
+      </div>
+      <div class="field"><label>Cantidad</label>
+        <input type="number" id="cambio-nuevo-cant" value="1" min="1" oninput="calcCambioDif()">
+      </div>
+    </div>
+    <div id="cambio-diferencia" style="display:none;margin-bottom:16px;font-size:13px;font-weight:600;padding:10px 14px;border-radius:10px"></div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="confirmarCambioProducto()">🔄 Confirmar cambio</button>
+      <button class="btn btn-ghost" onclick="closeModal('cambioOverlay')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="cambiosHoyOverlay" onclick="closeModal('cambiosHoyOverlay',event)">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-title">🔄 Cambios realizados</div>
+    <div id="cambios-hoy-content"></div>
+    <div class="btn-row" style="margin-top:16px">
+      <button class="btn btn-ghost" onclick="closeModal('cambiosHoyOverlay')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast-wrap" id="toastWrap"></div>
 
 <div id="mobile-nav">
@@ -350,7 +382,7 @@ const ROLES={
   vista:{label:'👩 Lic. Claudia Lucano',nav:['dashboard','stock','deudas']},
 };
 
-let currentRole=null,selectedRole=null,editingId=null,pagoDeudaId=null,carrito=[];
+let currentRole=null,selectedRole=null,editingId=null,pagoDeudaId=null,cambiandoMovId=null,carrito=[];
 
 function selectRole(role){
   selectedRole=role;
@@ -484,6 +516,8 @@ function tipoPill(t,metodo){
   if(t==='degustación')return'<span class="pill pill-amber">🍃 Degustación</span>';
   if(t==='deuda')return'<span class="pill pill-red">⚠️ Deuda</span>';
   if(t==='pago-deuda')return'<span class="pill pill-green">✅ Pago Deuda</span>';
+  if(t==='cambio-producto')return'<span class="pill pill-blue">🔄 Cambio</span>';
+  if(t==='devolucion-deuda')return'<span class="pill pill-blue">↩ Devolución</span>';
   if(t==='egreso')return'<span class="pill pill-red">💸 Egreso</span>';
   if(t==='apartado')return'<span class="pill pill-blue">📌 Apartado</span>';
   return`<span class="pill pill-gray">${t}</span>`;
@@ -577,7 +611,7 @@ function renderDashboard(fechaVer){
     const totalRegalias=regalias.reduce((s,m)=>s+(m.total||0),0);
     const unidadesRegalias=regalias.reduce((s,m)=>s+(m.items||[]).reduce((a,i)=>a+(i.cant||0),0),0);
     const porProd={};
-    movs.filter(m=>m.tipo!=='pago-deuda'&&m.tipo!=='egreso').forEach(m=>{
+    movs.filter(m=>m.tipo!=='pago-deuda'&&m.tipo!=='egreso'&&m.tipo!=='cambio-producto'&&m.tipo!=='devolucion-deuda').forEach(m=>{
       (m.items||(m.prodId?[{prodId:m.prodId,cant:m.cant}]:[])).forEach(item=>{
         if(!item.prodId)return;
         if(!porProd[item.prodId])porProd[item.prodId]=0;
@@ -585,6 +619,7 @@ function renderDashboard(fechaVer){
       });
     });
     const movsDisplay=movs.filter(m=>m.tipo!=='pago-deuda');
+    const cambiosHoy=movs.filter(m=>m.tipo==='cambio-producto'||m.tipo==='devolucion-deuda').length;
     c.innerHTML=`${alertaBanner}
       <div style="background:#fff;border:1.5px solid var(--purple-mid);border-radius:12px;padding:12px 14px;margin-bottom:18px;display:flex;align-items:center;flex-wrap:wrap;gap:10px;justify-content:space-between;box-shadow:var(--shadow)">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:1;min-width:0">
@@ -602,6 +637,7 @@ function renderDashboard(fechaVer){
         <div class="kpi-card"><div class="kpi-icon">📱</div><div class="kpi-label">Cobrado por QR</div><div class="kpi-val" style="color:var(--blue)">${fmt(digital)}</div><div class="kpi-sub">transferencias</div></div>
         <div class="kpi-card"><div class="kpi-icon">💸</div><div class="kpi-label">${esHoy?'Egresos hoy':'Egresos del día'}</div><div class="kpi-val" style="color:var(--red)">-${fmt(totalEgresos)}</div><div class="kpi-sub">salida de caja</div></div>
         ${apartadosPendientes>0?`<div class="kpi-card" style="cursor:pointer;border-color:var(--amber)" onclick="goTo('apartados')"><div class="kpi-icon">📌</div><div class="kpi-label">Apartados pendientes</div><div class="kpi-val" style="color:var(--amber)">${apartadosPendientes}</div><div class="kpi-sub">pendientes de entrega</div></div>`:''}
+        ${isAdmin()&&cambiosHoy>0?`<div class="kpi-card" style="cursor:pointer;border-color:var(--blue)" onclick="verCambiosHoy('${hoy}')"><div class="kpi-icon">🔄</div><div class="kpi-label">Cambios ${esHoy?'hoy':'ese día'}</div><div class="kpi-val" style="color:var(--blue)">${cambiosHoy}</div><div class="kpi-sub">devoluciones y cambios</div></div>`:''}
       </div>
       ${totalRegalias>0||unidadesRegalias>0?`<div style="background:var(--purple-light);border:1px solid var(--purple-mid);border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div><div style="font-size:11px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px">🎁 Regalías / Comisiones del día</div><div style="font-size:13px;color:var(--text2);font-weight:500">${unidadesRegalias} unidades entregadas — valor Bs. ${totalRegalias.toFixed(2)}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">No afecta caja · Solo descuenta inventario</div></div></div>`:''}
       <div class="panel" style="margin-bottom:16px">
@@ -1006,7 +1042,7 @@ function loadMovimientos(){
     movs.sort((a,b)=>((b.fecha||'')+(b.hora||'')).localeCompare((a.fecha||'')+(a.hora||'')));
     const el=document.getElementById('mov-table');if(!el)return;
     if(!movs.length){el.innerHTML='<div class="empty"><span class="empty-icon">📋</span><p>Sin movimientos.</p></div>';return;}
-    el.innerHTML=`<table><thead><tr><th>Fecha/Hora</th><th>Socio</th><th>Tipo</th><th>Detalle</th><th>Total</th><th>Nota</th>${isAdmin()?'<th>Acciones</th>':''}</tr></thead><tbody>${movs.map(m=>{const items=m.items||(m.prodId?[{prodId:m.prodId,cant:m.cant}]:[]);const prodStr=m.tipo==='egreso'?'💸 '+(m.descripcion||m.nota||'Egreso'):items.length?items.map(i=>{const p=getProd(i.prodId);return p?p.emoji+' '+p.nombre+' ×'+i.cant:'—';}).join(', '):'—';const totalColor=m.tipo==='egreso'?'var(--red)':'var(--teal-dark)';const totalStr=m.tipo==='egreso'?'-'+fmt(m.monto||m.total||0):fmt(m.total||0);return`<tr><td style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;white-space:nowrap">${m.fecha}<br>${m.hora||''}</td><td><div style="font-weight:700">${m.nombre||'—'}</div><div style="font-size:10px;color:var(--purple);font-family:'JetBrains Mono',monospace">${m.codigo||''}</div></td><td>${tipoPill(m.tipo,m.metodo)}</td><td style="font-size:12px;font-weight:500">${prodStr}</td><td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${totalColor};white-space:nowrap">${totalStr}</td><td style="font-size:11px;color:var(--muted)">${m.nota||'—'}</td>${isAdmin()?`<td><div class="btn-row"><button class="btn btn-ghost btn-icon" onclick="abrirEdicion('${m._key}')">✏️</button><button class="btn btn-danger btn-icon" onclick="eliminarMov('${m._key}')">✕</button></div></td>`:''}</tr>`;}).join('')}</tbody></table>`;
+    el.innerHTML=`<table><thead><tr><th>Fecha/Hora</th><th>Socio</th><th>Tipo</th><th>Detalle</th><th>Total</th><th>Nota</th>${canEdit()?'<th>Acciones</th>':''}</tr></thead><tbody>${movs.map(m=>{const items=m.items||(m.prodId?[{prodId:m.prodId,cant:m.cant}]:[]);const prodStr=m.tipo==='egreso'?'💸 '+(m.descripcion||m.nota||'Egreso'):items.length?items.map(i=>{const p=getProd(i.prodId);return p?p.emoji+' '+p.nombre+' ×'+i.cant:'—';}).join(', '):'—';const totalColor=m.tipo==='egreso'?'var(--red)':'var(--teal-dark)';const totalStr=m.tipo==='egreso'?'-'+fmt(m.monto||m.total||0):fmt(m.total||0);return`<tr><td style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;white-space:nowrap">${m.fecha}<br>${m.hora||''}</td><td><div style="font-weight:700">${m.nombre||'—'}</div><div style="font-size:10px;color:var(--purple);font-family:'JetBrains Mono',monospace">${m.codigo||''}</div></td><td>${tipoPill(m.tipo,m.metodo)}${m.modificadoPorCambio?'<div style="font-size:9px;color:var(--amber);margin-top:2px;font-weight:700">✏️ Modificada</div>':''}</td><td style="font-size:12px;font-weight:500">${prodStr}</td><td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${totalColor};white-space:nowrap">${totalStr}</td><td style="font-size:11px;color:var(--muted)">${m.nota||'—'}</td>${canEdit()?`<td><div class="btn-row">${isAdmin()?`<button class="btn btn-ghost btn-icon" onclick="abrirEdicion('${m._key}')">✏️</button><button class="btn btn-danger btn-icon" onclick="eliminarMov('${m._key}')">✕</button>`:''} ${m.tipo==='venta'?`<button class="btn btn-ghost btn-icon" onclick="abrirCambioProducto('${m._key}')" title="Cambiar producto">🔄</button>`:''}</div></td>`:''}</tr>`;}).join('')}</tbody></table>`;
   });
 }
 
@@ -1073,6 +1109,110 @@ function eliminarMov(key){
   });
 }
 
+function abrirCambioProducto(key){
+  cambiandoMovId=key;
+  db.ref('movimientos/'+key).once('value').then(snap=>{
+    const m=snap.val();if(!m)return;
+    const items=m.items||[];
+    document.getElementById('cambio-info').innerHTML=`<div style="font-weight:700">${m.nombre} <span style="font-size:11px;color:var(--purple);font-family:'JetBrains Mono',monospace">${m.codigo}</span></div><div style="font-size:12px;color:var(--muted)">Venta del ${m.fecha} — ${fmt(m.total||0)}${m.modificadoPorCambio?'<span style="color:var(--amber);margin-left:8px">✏️ Ya fue modificada — se puede cambiar de nuevo</span>':''}</div>`;
+    document.getElementById('cambio-item-wrap').innerHTML=`<div class="field"><label>Producto a devolver</label><select id="cambio-item-sel" onchange="calcCambioDif()">${items.map((item,idx)=>{const p=getProd(item.prodId);return`<option value="${idx}">${p?p.emoji+' '+p.nombre+' ×'+item.cant+' — Bs. '+((item.precio||p.precio)*item.cant).toFixed(2):item.prodId}</option>`;}).join('')}</select></div>`;
+    const prodOpts=PRODUCTOS.map(p=>`<option value="${p.id}">${p.emoji} ${p.nombre} — Bs. ${p.precio}</option>`).join('');
+    document.getElementById('cambio-nuevo-prod').innerHTML=`<option value="">— Seleccionar —</option>${prodOpts}`;
+    document.getElementById('cambio-nuevo-cant').value=1;
+    const difEl=document.getElementById('cambio-diferencia');difEl.style.display='none';difEl.innerHTML='';
+    document.getElementById('cambioOverlay').classList.add('open');
+  });
+}
+
+function calcCambioDif(){
+  const itemIdx=parseInt(document.getElementById('cambio-item-sel')?.value||0);
+  const nuevoProdId=document.getElementById('cambio-nuevo-prod')?.value;
+  const nuevoCant=parseInt(document.getElementById('cambio-nuevo-cant')?.value)||1;
+  const difEl=document.getElementById('cambio-diferencia');
+  if(!cambiandoMovId||!nuevoProdId){if(difEl)difEl.style.display='none';return;}
+  db.ref('movimientos/'+cambiandoMovId).once('value').then(snap=>{
+    const m=snap.val();if(!m)return;
+    const item=(m.items||[])[itemIdx];if(!item)return;
+    const prodDev=getProd(item.prodId);const prodNuevo=getProd(nuevoProdId);
+    if(!prodDev||!prodNuevo)return;
+    const valorDev=(item.precio||prodDev.precio)*item.cant;
+    const valorNuevo=prodNuevo.precio*nuevoCant;
+    const dif=valorNuevo-valorDev;
+    if(Math.abs(dif)<0.01){
+      difEl.style.cssText='display:block;background:var(--teal-light);border:1px solid #b3dfd8;border-radius:10px;padding:10px 14px;margin-bottom:16px;';
+      difEl.innerHTML='<span style="color:var(--teal-dark)">✅ Precios iguales — Intercambio sin diferencia económica</span>';
+    }else if(dif>0){
+      difEl.style.cssText='display:block;background:var(--red-light);border:1px solid #fecaca;border-radius:10px;padding:10px 14px;margin-bottom:16px;';
+      difEl.innerHTML=`<span style="color:var(--red)">⚠️ El nuevo producto es <strong>Bs. ${dif.toFixed(2)}</strong> más caro — Se creará una nueva deuda por la diferencia</span>`;
+    }else{
+      difEl.style.cssText='display:block;background:var(--purple-light);border:1px solid var(--purple-mid);border-radius:10px;padding:10px 14px;margin-bottom:16px;';
+      difEl.innerHTML=`<span style="color:var(--purple)">🎁 El nuevo producto es <strong>Bs. ${Math.abs(dif).toFixed(2)}</strong> más barato — Se registrará un saldo a favor como regalía</span>`;
+    }
+  });
+}
+
+function confirmarCambioProducto(){
+  if(!cambiandoMovId){toast('❌ Error: sin movimiento seleccionado');return;}
+  const itemIdx=parseInt(document.getElementById('cambio-item-sel')?.value||0);
+  const nuevoProdId=document.getElementById('cambio-nuevo-prod')?.value;
+  const nuevoCant=parseInt(document.getElementById('cambio-nuevo-cant')?.value)||1;
+  if(!nuevoProdId){toast('⚠️ Seleccioná el producto nuevo');return;}
+  if(nuevoCant<=0){toast('⚠️ Cantidad inválida');return;}
+  db.ref('movimientos/'+cambiandoMovId).once('value').then(snap=>{
+    const m=snap.val();if(!m)return;
+    const items=m.items||[];
+    const itemDev=items[itemIdx];if(!itemDev){toast('⚠️ Producto original no encontrado');return;}
+    if(nuevoProdId===itemDev.prodId){toast('⚠️ Seleccioná un producto diferente al que se devuelve');return;}
+    const prodDev=getProd(itemDev.prodId);const prodNuevo=getProd(nuevoProdId);
+    db.ref('stock').once('value').then(sSnap=>{
+      const stock=sSnap.val()||{};
+      if((stock[nuevoProdId]||0)<nuevoCant){toast(`❌ Stock insuficiente de ${prodNuevo?prodNuevo.nombre:nuevoProdId} — quedan ${stock[nuevoProdId]||0} unidades`);return;}
+      const valorDev=(itemDev.precio||prodDev.precio)*itemDev.cant;
+      const valorNuevo=prodNuevo.precio*nuevoCant;
+      const diferencia=valorNuevo-valorDev;
+      const now=new Date();const nowStr=now.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});const hoy=todayStr();
+      const realizadoPor=currentRole==='contador'?'Lic. Marcos':currentRole==='admin'?'Administrador':currentRole;
+      const updates={};
+      updates['stock/'+itemDev.prodId]=(stock[itemDev.prodId]||0)+itemDev.cant;
+      updates['stock/'+nuevoProdId]=(stock[nuevoProdId]||0)-nuevoCant;
+      updates['movimientos/'+cambiandoMovId+'/modificadoPorCambio']=true;
+      updates['movimientos/'+cambiandoMovId+'/cambioFecha']=hoy;
+      updates['movimientos/'+cambiandoMovId+'/cambioHora']=nowStr;
+      updates['movimientos/'+cambiandoMovId+'/cambioBy']=realizadoPor;
+      let notaCambio=`${prodDev?prodDev.emoji+' '+prodDev.nombre:itemDev.prodId} ×${itemDev.cant} → ${prodNuevo?prodNuevo.emoji+' '+prodNuevo.nombre:nuevoProdId} ×${nuevoCant}`;
+      if(Math.abs(diferencia)>0.01)notaCambio+=diferencia>0?` | +Bs.${diferencia.toFixed(2)} → nueva deuda`:` | Saldo a favor Bs.${Math.abs(diferencia).toFixed(2)} → regalía`;
+      const cambioKey=db.ref('movimientos').push().key;
+      updates['movimientos/'+cambioKey]={fecha:hoy,hora:nowStr,nombre:m.nombre,codigo:m.codigo,tipo:'cambio-producto',metodo:'Cambio',total:0,nota:notaCambio,items:[{prodId:nuevoProdId,cant:nuevoCant,precio:prodNuevo.precio,subtotal:prodNuevo.precio*nuevoCant}],itemDevuelto:{prodId:itemDev.prodId,cant:itemDev.cant,precio:itemDev.precio||prodDev.precio},movOriginalId:cambiandoMovId,diferenciaPrecio:diferencia,registradoPor:currentRole,realizadoPor};
+      if(diferencia>0.01){
+        const deudaKey=db.ref('deudas').push().key;
+        updates['deudas/'+deudaKey]={fecha:hoy,hora:nowStr,nombre:m.nombre,codigo:m.codigo,items:[{prodId:nuevoProdId,cant:nuevoCant,precio:prodNuevo.precio,subtotal:prodNuevo.precio*nuevoCant}],total:diferencia,saldo:diferencia,nota:`Diferencia cambio: ${prodDev?prodDev.nombre:itemDev.prodId} → ${prodNuevo?prodNuevo.nombre:nuevoProdId}`,estado:'pendiente',registradoPor:currentRole,movId:cambioKey};
+      }else if(diferencia<-0.01){
+        const regalKey=db.ref('movimientos').push().key;
+        updates['movimientos/'+regalKey]={fecha:hoy,hora:nowStr,nombre:m.nombre,codigo:m.codigo,tipo:'regalía',metodo:'Gratuito',total:Math.abs(diferencia),nota:`Saldo a favor por cambio: ${prodDev?prodDev.nombre:itemDev.prodId} → ${prodNuevo?prodNuevo.nombre:nuevoProdId}`,items:[],registradoPor:currentRole};
+      }
+      db.ref().update(updates).then(()=>{closeModal('cambioOverlay');toast('✅ Cambio de producto registrado');loadMovimientos();}).catch(()=>toast('❌ Error al registrar el cambio'));
+    });
+  });
+}
+
+function verCambiosHoy(fecha){
+  const f=fecha||todayStr();
+  db.ref('movimientos').once('value').then(snap=>{
+    const cambios=[];
+    snap.forEach(s=>{const v=s.val();if(v&&v.fecha===f&&(v.tipo==='cambio-producto'||v.tipo==='devolucion-deuda'))cambios.push({...v,_key:s.key});});
+    const el=document.getElementById('cambios-hoy-content');if(!el)return;
+    if(!cambios.length){el.innerHTML='<div class="empty"><span class="empty-icon">🔄</span><p>Sin cambios registrados ese día.</p></div>';}
+    else{
+      cambios.sort((a,b)=>(b.hora||'').localeCompare(a.hora||''));
+      el.innerHTML=cambios.map(c=>{
+        const nombreRol=c.realizadoPor||c.registradoPor||'—';
+        return`<div style="padding:12px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">${tipoPill(c.tipo,'')}<span style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace">${c.hora||''}</span></div><div style="font-weight:700;font-size:13px">${c.nombre||'—'} <span style="font-size:11px;color:var(--purple)">${c.codigo||''}</span></div><div style="font-size:12px;color:var(--muted);margin-top:2px">${c.nota||'—'}</div><div style="font-size:11px;color:var(--faint);margin-top:4px;font-weight:600">Realizado por: ${nombreRol}</div></div>`;
+      }).join('');
+    }
+    document.getElementById('cambiosHoyOverlay').classList.add('open');
+  });
+}
+
 function exportMovCSV(){
   db.ref('movimientos').orderByChild('fecha').once('value').then(snap=>{
     let movs=[];snap.forEach(s=>{if(s.val())movs.push(s.val());});
@@ -1090,7 +1230,7 @@ function renderDeudas(){
         <span class="panel-title">Deudas registradas</span>
         <select id="filtro-deuda" onchange="loadDeudas()" style="font-size:12px;padding:6px 10px;border-radius:8px;width:auto">
           <option value="">Todas</option><option value="pendiente">Pendientes</option>
-          <option value="parcial">Parciales</option><option value="pagada">Pagadas</option>
+          <option value="parcial">Parciales</option><option value="pagada">Pagadas</option><option value="devuelta">Devueltas</option>
         </select>
       </div>
       <div id="deudas-list"><div class="loading">⏳ Cargando...</div></div>
@@ -1110,10 +1250,10 @@ function loadDeudas(){
     el.innerHTML=lista.map(d=>{
       const items=d.items||(d.prodId?[{prodId:d.prodId,cant:d.cant}]:[]);
       const prodStr=items.map(i=>{const p=getProd(i.prodId);return p?p.emoji+' '+p.nombre+' × '+i.cant+' unidades':'—';}).join(', ');
-      const estadoClass=d.estado==='pagada'?'pagada':d.estado==='parcial'?'parcial':'pendiente';
-      const estadoPill=d.estado==='pagada'?'<span class="pill pill-green">✅ Pagada</span>':d.estado==='parcial'?'<span class="pill pill-amber">⏳ Parcial</span>':'<span class="pill pill-red">❌ Pendiente</span>';
+      const estadoClass=d.estado==='pagada'?'pagada':d.estado==='parcial'?'parcial':d.estado==='devuelta'?'devuelta':'pendiente';
+      const estadoPill=d.estado==='pagada'?'<span class="pill pill-green">✅ Pagada</span>':d.estado==='devuelta'?'<span class="pill pill-blue">↩ Devuelta</span>':d.estado==='parcial'?'<span class="pill pill-amber">⏳ Parcial</span>':'<span class="pill pill-red">❌ Pendiente</span>';
       const pagosHtml=d.pagos?Object.values(d.pagos).sort((a,b)=>((a.fecha||'')+(a.hora||'')).localeCompare((b.fecha||'')+(b.hora||''))).map(p2=>`<div style="font-size:11px;color:var(--muted);margin-top:4px;padding:6px 10px;background:var(--bg);border-radius:6px">✓ ${p2.fecha} ${p2.hora||''} — <strong>${fmt(p2.monto)}</strong> [${p2.metodo}]${p2.nota?' — '+p2.nota:''}</div>`).join(''):'';
-      return`<div class="deuda-card ${estadoClass}"><div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px"><div style="flex:1"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px"><span style="font-weight:800;font-size:15px">${d.nombre}</span><span style="font-size:11px;color:var(--purple);font-family:'JetBrains Mono',monospace;font-weight:700">${d.codigo}</span>${estadoPill}</div><div style="font-size:12px;color:var(--muted);margin-bottom:4px">📅 ${d.fecha} ${d.hora||''}</div><div style="font-size:13px;font-weight:600;margin-bottom:4px">${prodStr}</div>${d.nota?`<div style="font-size:12px;color:var(--muted)">📝 ${d.nota}</div>`:''} ${pagosHtml}</div><div style="text-align:right;min-width:120px"><div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:2px">SALDO</div><div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:800;color:var(--red)">${fmt(d.saldo)}</div><div style="font-size:11px;color:var(--faint)">de ${fmt(d.total)}</div></div></div>${canEdit()&&d.estado!=='pagada'?`<div class="btn-row" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)"><button class="btn btn-teal btn-sm" onclick="abrirPago('${d._key}')">💳 Registrar pago</button>${isAdmin()?`<button class="btn btn-danger btn-sm" onclick="eliminarDeuda('${d._key}',${JSON.stringify(items)},${d.estado==='pendiente'?1:0})">✕ Eliminar</button>`:''}</div>`:''}</div>`;
+      return`<div class="deuda-card ${estadoClass}"><div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px"><div style="flex:1"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px"><span style="font-weight:800;font-size:15px">${d.nombre}</span><span style="font-size:11px;color:var(--purple);font-family:'JetBrains Mono',monospace;font-weight:700">${d.codigo}</span>${estadoPill}</div><div style="font-size:12px;color:var(--muted);margin-bottom:4px">📅 ${d.fecha} ${d.hora||''}</div><div style="font-size:13px;font-weight:600;margin-bottom:4px">${prodStr}</div>${d.nota?`<div style="font-size:12px;color:var(--muted)">📝 ${d.nota}</div>`:''} ${pagosHtml}</div><div style="text-align:right;min-width:120px"><div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:2px">SALDO</div><div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:800;color:var(--red)">${fmt(d.saldo)}</div><div style="font-size:11px;color:var(--faint)">de ${fmt(d.total)}</div></div></div>${canEdit()&&d.estado!=='pagada'&&d.estado!=='devuelta'?`<div class="btn-row" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)"><button class="btn btn-teal btn-sm" onclick="abrirPago('${d._key}')">💳 Registrar pago</button><button class="btn btn-ghost btn-sm" onclick="devolverDeuda('${d._key}')">↩ Producto devuelto</button>${isAdmin()?`<button class="btn btn-danger btn-sm" onclick="eliminarDeuda('${d._key}',${JSON.stringify(items)},${d.estado==='pendiente'?1:0})">✕ Eliminar</button>`:''}</div>`:''}</div>`;
     }).join('');
   });
 }
@@ -1158,6 +1298,30 @@ function eliminarDeuda(key,items,reponerStock){
     const stock=snap.val()||{};const updates={['deudas/'+key]:null};
     if(reponerStock)(items||[]).forEach(i=>{if(i.prodId)updates['stock/'+i.prodId]=(stock[i.prodId]||0)+i.cant;});
     db.ref().update(updates).then(()=>{toast('🗑 Deuda eliminada');loadDeudas();});
+  });
+}
+
+function devolverDeuda(key){
+  if(!canEdit()){toast('❌ Sin permisos para realizar devoluciones');return;}
+  if(!confirm('¿Marcar esta deuda como "Producto devuelto"?\nLos productos volverán al stock y no se registrará ingreso de dinero.'))return;
+  db.ref('deudas/'+key).once('value').then(snap=>{
+    const d=snap.val();if(!d)return;
+    const items=d.items||(d.prodId?[{prodId:d.prodId,cant:d.cant}]:[]);
+    db.ref('stock').once('value').then(sSnap=>{
+      const stock=sSnap.val()||{};
+      const now=new Date();
+      const nowStr=now.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
+      const hoy=todayStr();
+      const realizadoPor=currentRole==='contador'?'Lic. Marcos':currentRole==='admin'?'Administrador':currentRole;
+      const updates={};
+      updates['deudas/'+key+'/estado']='devuelta';
+      updates['deudas/'+key+'/fechaDevolucion']=hoy;
+      updates['deudas/'+key+'/devueltoBy']=realizadoPor;
+      items.forEach(i=>{if(i.prodId)updates['stock/'+i.prodId]=(stock[i.prodId]||0)+i.cant;});
+      const movKey=db.ref('movimientos').push().key;
+      updates['movimientos/'+movKey]={fecha:hoy,hora:nowStr,nombre:d.nombre,codigo:d.codigo,tipo:'devolucion-deuda',metodo:'Devolución',total:0,nota:'Devolución de productos: '+items.map(i=>{const p=getProd(i.prodId);return p?p.nombre+' ×'+i.cant:i.prodId;}).join(', '),items,registradoPor:currentRole,realizadoPor,deudaId:key};
+      db.ref().update(updates).then(()=>{toast('↩ Productos devueltos al stock');loadDeudas();}).catch(()=>toast('❌ Error al registrar la devolución'));
+    });
   });
 }
 
@@ -1326,7 +1490,7 @@ function generarReporte(){
     });
     const cobD=pagosD.reduce((s,m)=>s+m.total,0);
     const totalEgr=egresos.reduce((s,m)=>s+(m.monto||m.total||0),0);
-    const unidades=_repMovs.filter(m=>m.tipo!=='pago-deuda'&&m.tipo!=='egreso').reduce((s,m)=>s+(m.items||(m.prodId?[{cant:m.cant}]:[])).reduce((a,i)=>a+(i.cant||0),0),0);
+    const unidades=_repMovs.filter(m=>m.tipo!=='pago-deuda'&&m.tipo!=='egreso'&&m.tipo!=='cambio-producto'&&m.tipo!=='devolucion-deuda').reduce((s,m)=>s+(m.items||(m.prodId?[{cant:m.cant}]:[])).reduce((a,i)=>a+(i.cant||0),0),0);
     const dPend=_repDeudas.filter(d=>d.estado!=='pagada').reduce((s,d)=>s+d.saldo,0);
     document.getElementById('rep-kpis').innerHTML=`
       <div class="kpi-card"><div class="kpi-icon">💰</div><div class="kpi-label">Ingresos totales</div><div class="kpi-val" style="color:var(--teal-dark)">${fmt(totalV)}</div><div class="kpi-sub">${ventas.length} ventas${apartadosRep.length?' + '+apartadosRep.length+' apart.':''}</div></div>
@@ -1338,7 +1502,7 @@ function generarReporte(){
       <div class="kpi-card"><div class="kpi-icon">⚠️</div><div class="kpi-label">Deudas pend.</div><div class="kpi-val" style="color:var(--red)">${fmt(dPend)}</div></div>
     `;
     const porProd={};
-    _repMovs.filter(m=>m.tipo!=='pago-deuda'&&m.tipo!=='egreso').forEach(m=>{
+    _repMovs.filter(m=>m.tipo!=='pago-deuda'&&m.tipo!=='egreso'&&m.tipo!=='cambio-producto'&&m.tipo!=='devolucion-deuda').forEach(m=>{
       (m.items||(m.prodId?[{prodId:m.prodId,cant:m.cant}]:[])).forEach(i=>{
         if(!i.prodId)return;
         if(!porProd[i.prodId])porProd[i.prodId]={cant:0,ventas:0};
