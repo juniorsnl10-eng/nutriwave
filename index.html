@@ -804,10 +804,15 @@ function nsProdChange(){const p=getProd(document.getElementById('ns-prod')?.valu
 
 function agregarAlCarrito(){
   const prodId=document.getElementById('ns-prod').value;
-  const cant=parseInt(document.getElementById('ns-cant').value)||1;
-  const precio=parseFloat(document.getElementById('ns-precio').value)||0;
+  const cantRaw=document.getElementById('ns-cant').value;
+  const precioRaw=document.getElementById('ns-precio').value;
+  const cant=parseInt(cantRaw,10);
+  const precio=parseFloat(precioRaw);
   if(!prodId){toast('⚠️ Seleccioná un producto');return;}
-  const existing=carrito.find(i=>i.prodId===prodId);
+  if(!Number.isInteger(cant)||cant<=0){toast('⚠️ La cantidad debe ser un número entero mayor a 0');return;}
+  if(isNaN(precio)||precio<=0){toast('⚠️ El precio debe ser un número positivo');return;}
+  // Misma línea solo si coinciden producto Y precio exacto
+  const existing=carrito.find(i=>i.prodId===prodId&&i.precio===precio);
   if(existing){existing.cant+=cant;existing.subtotal=existing.cant*existing.precio;}
   else{carrito.push({prodId,cant,precio,subtotal:cant*precio});}
   document.getElementById('ns-prod').value='';
