@@ -301,12 +301,21 @@ tbody tr:hover td{background:var(--bg)}
     <div class="modal-title">💳 Registrar pago de deuda</div>
     <div id="pagoDeudaInfo" style="background:var(--bg);border-radius:10px;padding:14px;margin-bottom:16px;font-size:13px;border:1px solid var(--border)"></div>
     <div class="form-row">
-      <div class="field"><label>Monto a pagar (Bs.)</label><input type="number" id="pago-monto" min="0" placeholder="0"></div>
-      <div class="field"><label>Método</label>
-        <select id="pago-metodo">
-          <option value="Efectivo">💵 Efectivo</option><option value="QR">📱 QR</option>
+      <div class="field"><label>Monto a pagar (Bs.)</label><input type="number" id="pago-monto" min="0" placeholder="0" step="0.01"></div>
+      <div class="field"><label>Fecha del pago</label><input type="date" id="pago-fecha"></div>
+    </div>
+    <div class="form-row">
+      <div class="field"><label>Método de pago</label>
+        <select id="pago-metodo" onchange="togglePagoMetodo()">
+          <option value="Efectivo">💵 Efectivo</option>
+          <option value="QR">📱 QR</option>
+          <option value="MixtoEfectivoQR">💱 Mixto Ef+QR</option>
         </select>
       </div>
+    </div>
+    <div id="pago-mixto-fields" class="form-row" style="display:none">
+      <div class="field"><label>Efectivo (Bs.)</label><input type="number" id="pago-ef" min="0" placeholder="0" step="0.01" oninput="calcPagoMixto()"></div>
+      <div class="field"><label>QR (Bs.)</label><input type="number" id="pago-qr-monto" min="0" placeholder="0" step="0.01" oninput="calcPagoMixto()"></div>
     </div>
     <div class="field" style="margin-bottom:16px"><label>Nota</label><input type="text" id="pago-nota" placeholder="opcional"></div>
     <div class="btn-row">
@@ -614,6 +623,7 @@ function renderDashboard(fechaVer){
     movs.filter(m=>m.tipo==='pago-deuda').forEach(m=>{
       if(m.metodo==='Efectivo') efectivo+=m.total||0;
       else if(m.metodo==='QR') digital+=m.total||0;
+      else if(m.metodo==='MixtoEfectivoQR'){efectivo+=m.montoEfectivo||0;digital+=m.montoQR||0;}
     });
 
     const totalEgresos=egresos.reduce((s,m)=>s+(m.monto||m.total||0),0);
@@ -1292,13 +1302,20 @@ function exportMovCSV(){
 function renderDeudas(){
   const c=document.getElementById('appContent');
   c.innerHTML=`
+    <div id="deudas-kpi" style="margin-bottom:16px"></div>
     <div class="panel">
-      <div class="panel-header">
+      <div class="panel-header" style="flex-wrap:wrap;gap:10px">
         <span class="panel-title">Deudas registradas</span>
-        <select id="filtro-deuda" onchange="loadDeudas()" style="font-size:12px;padding:6px 10px;border-radius:8px;width:auto">
-          <option value="">Todas</option><option value="pendiente">Pendientes</option>
-          <option value="parcial">Parciales</option><option value="pagada">Pagadas</option><option value="devuelta">Devueltas</option>
-        </select>
+        <div class="btn-row" style="flex-wrap:wrap;gap:6px">
+          <input type="text" id="buscar-deuda" placeholder="🔍 Buscar socio o código..." oninput="loadDeudas()" style="font-size:12px;padding:6px 10px;border-radius:8px;width:180px">
+          <select id="filtro-deuda" onchange="loadDeudas()" style="font-size:12px;padding:6px 10px;border-radius:8px;width:auto">
+            <option value="">Todas</option>
+            <option value="pendiente">⏳ Pendientes</option>
+            <option value="parcial">⚡ Parciales</option>
+            <option value="pagada">✅ Pagadas</option>
+            <option value="devuelta">↩ Devueltas</option>
+          </select>
+        </div>
       </div>
       <div id="deudas-list"><div class="loading">⏳ Cargando...</div></div>
     </div>
@@ -1307,71 +1324,208 @@ function renderDeudas(){
 }
 
 function loadDeudas(){
-  const filtro=document.getElementById('filtro-deuda')?.value;
-  db.ref('deudas').orderByChild('fecha').once('value').then(snap=>{
-    let lista=[];snap.forEach(s=>lista.push({...s.val(),_key:s.key}));
-    if(filtro)lista=lista.filter(d=>d.estado===filtro);
-    lista.reverse();
+  const filtro=document.getElementById('filtro-deuda')?.value||'';
+  const buscar=(document.getElementById('buscar-deuda')?.value||'').toLowerCase().trim();
+  // Lee AMBAS colecciones: deudas/ (registros formales) + movimientos/ (tipo='deuda' sin registro formal)
+  Promise.all([
+    db.ref('deudas').once('value'),
+    db.ref('movimientos').once('value')
+  ]).then(([deudasSnap,movsSnap])=>{
+    // Construir mapa de deudas formales y sus movId referenciados
+    const deudaMap={};
+    const movIdsEnDeudas=new Set();
+    deudasSnap.forEach(s=>{
+      const v=s.val();
+      if(v){deudaMap[s.key]={...v,_key:s.key};if(v.movId)movIdsEnDeudas.add(v.movId);}
+    });
+    // Agregar movimientos tipo='deuda' que NO tienen entrada formal en deudas/
+    movsSnap.forEach(s=>{
+      const v=s.val();
+      if(v&&v.tipo==='deuda'&&!movIdsEnDeudas.has(s.key)){
+        deudaMap['_mov_'+s.key]={
+          _key:'_mov_'+s.key,_synthetic:true,
+          fecha:v.fecha,hora:v.hora,nombre:v.nombre||'—',codigo:v.codigo||'',
+          items:v.items||(v.prodId?[{prodId:v.prodId,cant:v.cant}]:[]),
+          total:v.total||0,saldo:v.total||0,
+          nota:v.nota||'',estado:'pendiente',
+          registradoPor:v.registradoPor,movId:s.key
+        };
+      }
+    });
+    let lista=Object.values(deudaMap);
+    // Ordenar: más antiguas primero (prioriza cobros pendientes)
+    lista.sort((a,b)=>((a.fecha||'')+(a.hora||'')).localeCompare((b.fecha||'')+(b.hora||'')));
+    // Filtros
+    if(filtro)lista=lista.filter(d=>(d.estado||'pendiente')===filtro);
+    if(buscar)lista=lista.filter(d=>(d.nombre||'').toLowerCase().includes(buscar)||(d.codigo||'').toLowerCase().includes(buscar));
     const el=document.getElementById('deudas-list');if(!el)return;
-    if(!lista.length){el.innerHTML='<div class="empty"><span class="empty-icon">💳</span><p>Sin deudas registradas.</p></div>';return;}
+    // KPIs
+    const todas=Object.values(deudaMap);
+    const pendTot=todas.filter(d=>d.estado!=='pagada'&&d.estado!=='devuelta');
+    const totalAdeudado=pendTot.reduce((s,d)=>s+(d.saldo||0),0);
+    const kpiEl=document.getElementById('deudas-kpi');
+    if(kpiEl){
+      kpiEl.innerHTML=`<div class="kpi-row" style="margin-bottom:0">
+        <div class="kpi-card"><div class="kpi-icon">💳</div><div class="kpi-label">Total adeudado</div><div class="kpi-val" style="color:var(--red)">${fmt(totalAdeudado)}</div><div class="kpi-sub">${pendTot.length} deuda${pendTot.length!==1?'s':''} activa${pendTot.length!==1?'s':''}</div></div>
+        <div class="kpi-card"><div class="kpi-icon">❌</div><div class="kpi-label">Pendientes</div><div class="kpi-val" style="color:var(--red)">${todas.filter(d=>!d.estado||d.estado==='pendiente').length}</div></div>
+        <div class="kpi-card"><div class="kpi-icon">⏳</div><div class="kpi-label">Pago parcial</div><div class="kpi-val" style="color:var(--amber)">${todas.filter(d=>d.estado==='parcial').length}</div></div>
+        <div class="kpi-card"><div class="kpi-icon">✅</div><div class="kpi-label">Pagadas</div><div class="kpi-val" style="color:var(--teal-dark)">${todas.filter(d=>d.estado==='pagada').length}</div></div>
+      </div>`;
+    }
+    if(!lista.length){el.innerHTML='<div class="empty"><span class="empty-icon">💳</span><p>Sin deudas en esta categoría.</p></div>';return;}
     el.innerHTML=lista.map(d=>{
       const items=d.items||(d.prodId?[{prodId:d.prodId,cant:d.cant}]:[]);
       const prodStr=items.map(i=>{const p=getProd(i.prodId);return p?p.emoji+' '+p.nombre+' × '+i.cant+' unidades':'—';}).join(', ');
-      const estadoClass=d.estado==='pagada'?'pagada':d.estado==='parcial'?'parcial':d.estado==='devuelta'?'devuelta':'pendiente';
-      const estadoPill=d.estado==='pagada'?'<span class="pill pill-green">✅ Pagada</span>':d.estado==='devuelta'?'<span class="pill pill-blue">↩ Devuelta</span>':d.estado==='parcial'?'<span class="pill pill-amber">⏳ Parcial</span>':'<span class="pill pill-red">❌ Pendiente</span>';
+      const estado=d.estado||'pendiente';
+      const estadoClass=estado==='pagada'?'pagada':estado==='parcial'?'parcial':estado==='devuelta'?'devuelta':'pendiente';
+      const estadoPill=estado==='pagada'?'<span class="pill pill-green">✅ Pagada</span>':estado==='devuelta'?'<span class="pill pill-blue">↩ Devuelta</span>':estado==='parcial'?'<span class="pill pill-amber">⏳ Parcial</span>':'<span class="pill pill-red">❌ Pendiente</span>';
       const pagosHtml=d.pagos?Object.values(d.pagos).sort((a,b)=>((a.fecha||'')+(a.hora||'')).localeCompare((b.fecha||'')+(b.hora||''))).map(p2=>`<div style="font-size:11px;color:var(--muted);margin-top:4px;padding:6px 10px;background:var(--bg);border-radius:6px">✓ ${p2.fecha} ${p2.hora||''} — <strong>${fmt(p2.monto)}</strong> [${p2.metodo}]${p2.nota?' — '+p2.nota:''}</div>`).join(''):'';
-      return`<div class="deuda-card ${estadoClass}"><div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px"><div style="flex:1"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px"><span style="font-weight:800;font-size:15px">${d.nombre}</span><span style="font-size:11px;color:var(--purple);font-family:'JetBrains Mono',monospace;font-weight:700">${d.codigo}</span>${estadoPill}</div><div style="font-size:12px;color:var(--muted);margin-bottom:4px">📅 ${d.fecha} ${d.hora||''}</div><div style="font-size:13px;font-weight:600;margin-bottom:4px">${prodStr}</div>${d.nota?`<div style="font-size:12px;color:var(--muted)">📝 ${d.nota}</div>`:''} ${pagosHtml}</div><div style="text-align:right;min-width:120px"><div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:2px">SALDO</div><div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:800;color:var(--red)">${fmt(d.saldo)}</div><div style="font-size:11px;color:var(--faint)">de ${fmt(d.total)}</div></div></div>${canEdit()&&d.estado!=='pagada'&&d.estado!=='devuelta'?`<div class="btn-row" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)"><button class="btn btn-teal btn-sm" onclick="abrirPago('${d._key}')">💳 Registrar pago</button><button class="btn btn-ghost btn-sm" onclick="devolverDeuda('${d._key}')">↩ Producto devuelto</button>${isAdmin()?`<button class="btn btn-danger btn-sm" onclick="eliminarDeuda('${d._key}',${JSON.stringify(items)},${d.estado==='pendiente'?1:0})">✕ Eliminar</button>`:''}</div>`:''}</div>`;
+      const pagadoHasta=(d.total||0)-(d.saldo||0);
+      const puedeAccionar=canEdit()&&estado!=='pagada'&&estado!=='devuelta';
+      const itemsJSON=JSON.stringify(items).replace(/'/g,"\\'");
+      return`<div class="deuda-card ${estadoClass}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
+              <span style="font-weight:800;font-size:15px">${d.nombre||'—'}</span>
+              <span style="font-size:11px;color:var(--purple);font-family:'JetBrains Mono',monospace;font-weight:700">${d.codigo||''}</span>
+              ${estadoPill}
+            </div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:4px">📅 ${d.fecha||'—'} ${d.hora||''}</div>
+            <div style="font-size:13px;font-weight:600;margin-bottom:4px">${prodStr}</div>
+            ${d.nota?`<div style="font-size:12px;color:var(--muted)">📝 ${d.nota}</div>`:''}
+            ${pagosHtml}
+          </div>
+          <div style="text-align:right;min-width:130px;flex-shrink:0">
+            <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:2px">SALDO PENDIENTE</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:800;color:var(--red)">${fmt(d.saldo||0)}</div>
+            <div style="font-size:11px;color:var(--faint)">de ${fmt(d.total||0)}</div>
+            ${pagadoHasta>0.01?`<div style="font-size:11px;color:var(--teal-dark);font-weight:600;margin-top:3px">✓ Pagado: ${fmt(pagadoHasta)}</div>`:''}
+          </div>
+        </div>
+        ${puedeAccionar?`<div class="btn-row" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
+          <button class="btn btn-teal btn-sm" onclick="abrirPago('${d._key}')">💳 Registrar pago</button>
+          <button class="btn btn-ghost btn-sm" onclick="devolverDeuda('${d._key}')">↩ Producto devuelto</button>
+          ${isAdmin()?`<button class="btn btn-danger btn-sm" onclick="eliminarDeuda('${d._key}',${JSON.stringify(items)},${estado==='pendiente'?1:0})">✕ Eliminar</button>`:''}
+        </div>`:''}
+      </div>`;
     }).join('');
   });
 }
 
-function abrirPago(key){
-  pagoDeudaId=key;
-  db.ref('deudas/'+key).once('value').then(snap=>{
-    const d=snap.val();
+function togglePagoMetodo(){
+  const metodo=document.getElementById('pago-metodo')?.value;
+  const mf=document.getElementById('pago-mixto-fields');
+  if(mf)mf.style.display=metodo==='MixtoEfectivoQR'?'grid':'none';
+}
+
+function calcPagoMixto(){
+  const ef=parseFloat(document.getElementById('pago-ef')?.value)||0;
+  const qr=parseFloat(document.getElementById('pago-qr-monto')?.value)||0;
+  const montoEl=document.getElementById('pago-monto');
+  if(montoEl)montoEl.value=(ef+qr).toFixed(2);
+}
+
+function materializarDeuda(syntheticKey){
+  const movKey=syntheticKey.replace('_mov_','');
+  return db.ref('movimientos/'+movKey).once('value').then(snap=>{
+    const m=snap.val();
+    if(!m)throw new Error('Movimiento no encontrado');
+    const nuevoKey=db.ref('deudas').push().key;
+    const data={fecha:m.fecha,hora:m.hora,nombre:m.nombre||'—',codigo:m.codigo||'',items:m.items||(m.prodId?[{prodId:m.prodId,cant:m.cant}]:[]),total:m.total||0,saldo:m.total||0,nota:m.nota||'',estado:'pendiente',registradoPor:m.registradoPor||currentRole,movId:movKey};
+    return db.ref('deudas/'+nuevoKey).set(data).then(()=>({deudaKey:nuevoKey,deudaData:{...data,_key:nuevoKey}}));
+  });
+}
+
+function _mostrarModalPago(deudaKey){
+  pagoDeudaId=deudaKey;
+  db.ref('deudas/'+deudaKey).once('value').then(snap=>{
+    const d=snap.val();if(!d)return;
     const items=d.items||(d.prodId?[{prodId:d.prodId,cant:d.cant}]:[]);
     const prodStr=items.map(i=>{const p=getProd(i.prodId);return p?p.emoji+' '+p.nombre:'—';}).join(', ');
-    document.getElementById('pagoDeudaInfo').innerHTML=`<div style="font-weight:700;font-size:14px;margin-bottom:4px">${d.nombre} <span style="font-size:11px;color:var(--purple);font-family:'JetBrains Mono',monospace">${d.codigo}</span></div><div style="font-size:12px;color:var(--muted);margin-bottom:6px">${prodStr}</div>Saldo pendiente: <strong style="color:var(--red);font-family:'JetBrains Mono',monospace">${fmt(d.saldo)}</strong>`;
-    document.getElementById('pago-monto').value='';document.getElementById('pago-nota').value='';
+    const pagadoHasta=(d.total||0)-(d.saldo||0);
+    document.getElementById('pagoDeudaInfo').innerHTML=`
+      <div style="font-weight:700;font-size:14px;margin-bottom:4px">${d.nombre||'—'} <span style="font-size:11px;color:var(--purple);font-family:'JetBrains Mono',monospace">${d.codigo||''}</span></div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">${prodStr}</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px">
+        <span>Total: <strong style="font-family:'JetBrains Mono',monospace">${fmt(d.total||0)}</strong></span>
+        <span>Saldo: <strong style="color:var(--red);font-family:'JetBrains Mono',monospace">${fmt(d.saldo||0)}</strong></span>
+        ${pagadoHasta>0.01?`<span>Ya pagado: <strong style="color:var(--teal-dark);font-family:'JetBrains Mono',monospace">${fmt(pagadoHasta)}</strong></span>`:''}
+      </div>`;
+    document.getElementById('pago-monto').value=(d.saldo||0).toFixed(2);
+    document.getElementById('pago-fecha').value=todayStr();
+    document.getElementById('pago-metodo').value='Efectivo';
+    document.getElementById('pago-nota').value='';
+    const ef=document.getElementById('pago-ef');const qr=document.getElementById('pago-qr-monto');
+    if(ef)ef.value='';if(qr)qr.value='';
+    togglePagoMetodo();
     document.getElementById('pagoOverlay').classList.add('open');
   });
+}
+
+function abrirPago(key){
+  if(key.startsWith('_mov_')){
+    materializarDeuda(key).then(({deudaKey})=>{_mostrarModalPago(deudaKey);loadDeudas();}).catch(e=>toast('❌ '+e.message));
+  }else{
+    _mostrarModalPago(key);
+  }
 }
 
 function confirmarPago(){
   const monto=parseFloat(document.getElementById('pago-monto').value)||0;
   const metodo=document.getElementById('pago-metodo').value;
   const nota=document.getElementById('pago-nota').value.trim();
-  if(monto<=0){toast('⚠️ Ingresá el monto');return;}
+  const fechaPago=document.getElementById('pago-fecha')?.value||todayStr();
+  let montoEfectivo=0,montoQR=0;
+  if(metodo==='Efectivo'){montoEfectivo=monto;}
+  else if(metodo==='QR'){montoQR=monto;}
+  else if(metodo==='MixtoEfectivoQR'){
+    montoEfectivo=parseFloat(document.getElementById('pago-ef')?.value)||0;
+    montoQR=parseFloat(document.getElementById('pago-qr-monto')?.value)||0;
+    if(Math.abs(montoEfectivo+montoQR-monto)>0.02){toast('⚠️ Los montos Ef.+QR deben sumar al total pagado');return;}
+  }
+  if(monto<=0){toast('⚠️ Ingresá el monto a pagar');return;}
   db.ref('deudas/'+pagoDeudaId).once('value').then(snap=>{
     const d=snap.val();
-    if(monto>d.saldo+0.01){toast(`⚠️ El pago (${fmt(monto)}) supera el saldo pendiente (${fmt(d.saldo)})`);return;}
-    const nuevoSaldo=Math.max(0,d.saldo-monto);
-    const nuevoEstado=nuevoSaldo===0?'pagada':'parcial';
+    if(!d){toast('❌ Error: deuda no encontrada');return;}
+    if(monto>d.saldo+0.02){toast(`⚠️ El pago (${fmt(monto)}) supera el saldo pendiente (${fmt(d.saldo)})`);return;}
+    const nuevoSaldo=Math.max(0,parseFloat((d.saldo-monto).toFixed(2)));
+    const nuevoEstado=nuevoSaldo<0.01?'pagada':'parcial';
     const pagoKey=db.ref('deudas/'+pagoDeudaId+'/pagos').push().key;
     const now=new Date();
+    const hora=now.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
     const updates={};
     updates[`deudas/${pagoDeudaId}/saldo`]=nuevoSaldo;
     updates[`deudas/${pagoDeudaId}/estado`]=nuevoEstado;
-    updates[`deudas/${pagoDeudaId}/pagos/${pagoKey}`]={fecha:todayStr(),hora:now.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'}),monto,metodo,nota,registradoPor:currentRole};
-    updates['movimientos/'+db.ref('movimientos').push().key]={fecha:todayStr(),hora:now.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'}),nombre:d.nombre,codigo:d.codigo,tipo:'pago-deuda',metodo,items:d.items||[],total:monto,nota:nota||'Pago de deuda',registradoPor:currentRole};
-    db.ref().update(updates).then(()=>{closeModal('pagoOverlay');toast(`✅ Pago de ${fmt(monto)} registrado`);loadDeudas();}).catch(()=>toast('❌ Error al registrar el pago'));
+    updates[`deudas/${pagoDeudaId}/pagos/${pagoKey}`]={fecha:fechaPago,hora,monto,metodo,montoEfectivo,montoQR,nota,registradoPor:currentRole};
+    updates['movimientos/'+db.ref('movimientos').push().key]={fecha:fechaPago,hora,nombre:d.nombre,codigo:d.codigo||'',tipo:'pago-deuda',metodo,items:d.items||[],total:monto,nota:nota||'Pago de deuda',montoEfectivo,montoQR,registradoPor:currentRole,deudaId:pagoDeudaId};
+    db.ref().update(updates).then(()=>{
+      closeModal('pagoOverlay');
+      toast(nuevoEstado==='pagada'?`✅ Deuda saldada — ${fmt(monto)} recibidos`:`✅ Pago parcial de ${fmt(monto)} registrado — Saldo restante: ${fmt(nuevoSaldo)}`);
+      loadDeudas();
+    }).catch(()=>toast('❌ Error al registrar el pago'));
   });
 }
 
 function eliminarDeuda(key,items,reponerStock){
   if(!isAdmin()){toast('❌ Solo el administrador puede eliminar');return;}
-  if(!confirm('¿Eliminar esta deuda?'))return;
+  if(!confirm('¿Eliminar esta deuda? Esta acción no se puede deshacer.'))return;
   db.ref('stock').once('value').then(snap=>{
-    const stock=snap.val()||{};const updates={['deudas/'+key]:null};
+    const stock=snap.val()||{};
+    const updates={};
+    if(key.startsWith('_mov_')){
+      // Registro sintético: solo existe en movimientos/
+      updates['movimientos/'+key.replace('_mov_','')]=null;
+    }else{
+      updates['deudas/'+key]=null;
+    }
     if(reponerStock)(items||[]).forEach(i=>{if(i.prodId)updates['stock/'+i.prodId]=(stock[i.prodId]||0)+i.cant;});
     db.ref().update(updates).then(()=>{toast('🗑 Deuda eliminada');loadDeudas();});
   });
 }
 
-function devolverDeuda(key){
-  if(!canEdit()){toast('❌ Sin permisos para realizar devoluciones');return;}
-  if(!confirm('¿Marcar esta deuda como "Producto devuelto"?\nLos productos volverán al stock y no se registrará ingreso de dinero.'))return;
-  db.ref('deudas/'+key).once('value').then(snap=>{
+function _ejecutarDevolucion(deudaKey){
+  db.ref('deudas/'+deudaKey).once('value').then(snap=>{
     const d=snap.val();if(!d)return;
     const items=d.items||(d.prodId?[{prodId:d.prodId,cant:d.cant}]:[]);
     db.ref('stock').once('value').then(sSnap=>{
@@ -1381,15 +1535,25 @@ function devolverDeuda(key){
       const hoy=todayStr();
       const realizadoPor=currentRole==='contador'?'Lic. Marcos':currentRole==='admin'?'Administrador':currentRole;
       const updates={};
-      updates['deudas/'+key+'/estado']='devuelta';
-      updates['deudas/'+key+'/fechaDevolucion']=hoy;
-      updates['deudas/'+key+'/devueltoBy']=realizadoPor;
+      updates['deudas/'+deudaKey+'/estado']='devuelta';
+      updates['deudas/'+deudaKey+'/fechaDevolucion']=hoy;
+      updates['deudas/'+deudaKey+'/devueltoBy']=realizadoPor;
       items.forEach(i=>{if(i.prodId)updates['stock/'+i.prodId]=(stock[i.prodId]||0)+i.cant;});
       const movKey=db.ref('movimientos').push().key;
-      updates['movimientos/'+movKey]={fecha:hoy,hora:nowStr,nombre:d.nombre,codigo:d.codigo,tipo:'devolucion-deuda',metodo:'Devolución',total:0,nota:'Devolución de productos: '+items.map(i=>{const p=getProd(i.prodId);return p?p.nombre+' ×'+i.cant:i.prodId;}).join(', '),items,registradoPor:currentRole,realizadoPor,deudaId:key};
+      updates['movimientos/'+movKey]={fecha:hoy,hora:nowStr,nombre:d.nombre,codigo:d.codigo||'',tipo:'devolucion-deuda',metodo:'Devolución',total:0,nota:'Devolución de productos: '+items.map(i=>{const p=getProd(i.prodId);return p?p.nombre+' ×'+i.cant:i.prodId;}).join(', '),items,registradoPor:currentRole,realizadoPor,deudaId:deudaKey};
       db.ref().update(updates).then(()=>{toast('↩ Productos devueltos al stock');loadDeudas();}).catch(()=>toast('❌ Error al registrar la devolución'));
     });
   });
+}
+
+function devolverDeuda(key){
+  if(!canEdit()){toast('❌ Sin permisos para realizar devoluciones');return;}
+  if(!confirm('¿Marcar esta deuda como "Producto devuelto"?\nLos productos volverán al stock y no se registrará ingreso de dinero.'))return;
+  if(key.startsWith('_mov_')){
+    materializarDeuda(key).then(({deudaKey})=>{_ejecutarDevolucion(deudaKey);loadDeudas();}).catch(e=>toast('❌ '+e.message));
+  }else{
+    _ejecutarDevolucion(key);
+  }
 }
 
 function renderApartados(){
