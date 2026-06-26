@@ -151,6 +151,11 @@ tbody tr:hover td{background:var(--bg)}
 .dark-toggle{background:none;border:none;color:var(--faint);cursor:pointer;font-size:16px;padding:4px;border-radius:6px;transition:all .12s}
 .dark-toggle:hover{color:var(--text);background:var(--bg)}
 .stock-alert-banner{background:var(--amber-light);border:1.5px solid #fde68a;border-radius:12px;padding:12px 18px;margin-bottom:18px;display:flex;align-items:flex-start;gap:10px;font-size:13px;font-weight:600;color:var(--amber);flex-wrap:wrap}
+.btn-notif{position:relative;background:none;border:none;font-size:20px;cursor:pointer;padding:4px 8px;border-radius:8px;transition:background .12s;line-height:1}
+.btn-notif:hover{background:var(--bg)}
+.notif-badge{position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;border-radius:50%;width:18px;height:18px;font-size:10px;font-weight:800;display:flex!important;align-items:center;justify-content:center;font-family:'Inter',sans-serif;pointer-events:none}
+.notif-panel{position:absolute;right:0;top:calc(100% + 8px);width:340px;background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow-lg);z-index:300;max-height:420px;overflow-y:auto;padding:16px}
+[data-theme="dark"] .notif-panel{background:var(--surface)!important;border-color:var(--border)!important}
 @media screen and (max-width:768px){
   .sidebar{display:none!important}
   .main{margin-left:0!important}
@@ -239,7 +244,13 @@ tbody tr:hover td{background:var(--bg)}
 <main class="main" id="mainApp" style="display:none">
   <div class="topbar">
     <div class="topbar-title" id="pageTitle">Dashboard</div>
-    <div class="date-chip" id="topDate">—</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div id="notif-wrap" style="display:none;position:relative">
+        <button class="btn-notif" onclick="verNotificaciones()" title="Notificaciones de entradas">🔔<span id="notif-badge" style="display:none" class="notif-badge">0</span></button>
+        <div id="notif-panel" class="notif-panel" style="display:none"></div>
+      </div>
+      <div class="date-chip" id="topDate">—</div>
+    </div>
   </div>
   <div class="content" id="appContent"></div>
 </main>
@@ -342,6 +353,7 @@ tbody tr:hover td{background:var(--bg)}
   <button class="mobile-nav-btn active" id="mn-dashboard" onclick="mobileGoTo('dashboard')"><span class="mn-icon">📊</span>Dashboard</button>
   <button class="mobile-nav-btn" id="mn-nueva-salida" onclick="mobileGoTo('nueva-salida')"><span class="mn-icon">📤</span>Salida</button>
   <button class="mobile-nav-btn" id="mn-stock" onclick="mobileGoTo('stock')"><span class="mn-icon">📦</span>Stock</button>
+  <button class="mobile-nav-btn" id="mn-entrada-stock" onclick="mobileGoTo('entrada-stock')"><span class="mn-icon">📥</span>Entrada</button>
   <button class="mobile-nav-btn" id="mn-movimientos" onclick="mobileGoTo('movimientos')"><span class="mn-icon">📋</span>Movim.</button>
   <button class="mobile-nav-btn" id="mn-deudas" onclick="mobileGoTo('deudas')"><span class="mn-icon">💳</span>Deudas</button>
   <button class="mobile-nav-btn" id="mn-apartados" onclick="mobileGoTo('apartados')"><span class="mn-icon">📌</span>Apart.</button>
@@ -378,7 +390,7 @@ const PRODUCTOS=[
 const PINS={admin:'1234',contador:'5678'};
 const ROLES={
   admin:{label:'🧑‍💼 Administrador',nav:['dashboard','nueva-salida','stock','entrada-stock','movimientos','deudas','apartados','reportes']},
-  contador:{label:'🧾 Lic. Marcos',nav:['dashboard','nueva-salida','movimientos','deudas','apartados','reportes']},
+  contador:{label:'🧾 Lic. Marcos',nav:['dashboard','nueva-salida','entrada-stock','movimientos','deudas','apartados','reportes']},
   vista:{label:'👩 Lic. Claudia Lucano',nav:['dashboard','stock','deudas']},
 };
 
@@ -421,6 +433,7 @@ function enterApp(role){
     b.style.display=(!b.id||pages.includes(page))?'flex':'none';
   });
   initDarkMode();buildNav();goTo('dashboard');
+  if(role==='admin')initNotificaciones();
 }
 
 function logout(){
@@ -917,23 +930,34 @@ function ajustarStock(id,nombre,actual){
 }
 
 function renderEntradaStock(){
-  if(!isAdmin()){document.getElementById('appContent').innerHTML='<div class="empty"><span class="empty-icon">🔒</span><p>Solo el administrador puede registrar entradas de stock.</p></div>';return;}
   const c=document.getElementById('appContent');
+  const costoField=isAdmin()?`<div class="field"><label>Costo total (Bs.)</label><input type="number" id="es-costo" min="0" placeholder="0"></div>`:'';
   c.innerHTML=`
     <div class="panel">
-      <div class="panel-header"><span class="panel-title">Registrar entrada de mercadería</span></div>
+      <div class="panel-header"><span class="panel-title">📥 Registrar entrada de mercadería</span></div>
+      ${!isAdmin()?`<div style="background:var(--blue-light);border:1px solid #bfdbfe;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--blue);font-weight:600">ℹ️ Podés registrar entradas de productos existentes. No podés crear productos nuevos ni editar entradas ya guardadas.</div>`:''}
       <div class="form-row">
         <div class="field"><label>Producto</label>
           <select id="es-prod"><option value="">— Seleccionar —</option>${PRODUCTOS.map(p=>`<option value="${p.id}">${p.emoji} ${p.nombre}</option>`).join('')}</select>
         </div>
         <div class="field"><label>Unidades que ingresan</label><input type="number" id="es-cant" min="1" placeholder="0"></div>
-        <div class="field"><label>Costo total (Bs.)</label><input type="number" id="es-costo" min="0" placeholder="0"></div>
-        <div class="field"><label>Nota / Proveedor</label><input type="text" id="es-nota" placeholder="ej. Producción interna"></div>
+        ${costoField}
+        <div class="field"><label>Nota / Proveedor / N° Factura</label><input type="text" id="es-nota" placeholder="ej. Proveedor X — Factura 123"></div>
       </div>
-      <button class="btn btn-teal" onclick="registrarEntrada()">📥 Registrar entrada</button>
+      <button class="btn btn-teal" onclick="registrarEntrada()">📥 Confirmar entrada</button>
     </div>
     <div class="panel">
-      <div class="panel-header"><span class="panel-title">Entradas recientes</span></div>
+      <div class="panel-header">
+        <span class="panel-title">Historial de entradas</span>
+        <div class="btn-row">
+          <input type="date" id="filtro-entrada-fecha" onchange="loadEntradas()" style="font-size:12px;padding:6px 10px;border-radius:8px;width:auto" title="Filtrar por fecha">
+          <select id="filtro-entrada-usuario" onchange="loadEntradas()" style="font-size:12px;padding:6px 10px;border-radius:8px;width:auto">
+            <option value="">Todos los usuarios</option>
+            <option value="Administrador">Administrador</option>
+            <option value="Lic. Marcos">Lic. Marcos</option>
+          </select>
+        </div>
+      </div>
       <div id="entradas-list"><div class="loading">⏳ Cargando...</div></div>
     </div>
   `;
@@ -941,37 +965,75 @@ function renderEntradaStock(){
 }
 
 function loadEntradas(){
+  const filtroFecha=document.getElementById('filtro-entrada-fecha')?.value||'';
+  const filtroUsuario=document.getElementById('filtro-entrada-usuario')?.value||'';
   db.ref('entradas').once('value').then(snap=>{
-    const lista=[];snap.forEach(s=>{const v=s.val();if(v)lista.push({...v,_key:s.key});});
+    let lista=[];snap.forEach(s=>{const v=s.val();if(v)lista.push({...v,_key:s.key});});
     lista.sort((a,b)=>((b.fecha||'')+(b.hora||'')).localeCompare((a.fecha||'')+(a.hora||'')));
+    if(filtroFecha)lista=lista.filter(e=>e.fecha===filtroFecha);
+    if(filtroUsuario)lista=lista.filter(e=>(e.registradoPorLabel||e.registradoPor||'').includes(filtroUsuario));
     const el=document.getElementById('entradas-list');if(!el)return;
     if(!lista.length){el.innerHTML='<div class="empty"><span class="empty-icon">📥</span><p>Sin entradas registradas.</p></div>';return;}
-    el.innerHTML=`<table><thead><tr><th>Fecha</th><th>Producto</th><th>Cantidad</th><th>Costo</th><th>Nota</th>${isAdmin()?'<th></th>':''}</tr></thead><tbody>${lista.map(e=>{const p=getProd(e.prodId);return`<tr><td style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace">${e.fecha} ${e.hora||''}</td><td style="font-weight:600">${p?p.emoji+' '+p.nombre:e.prodId}</td><td><span class="pill pill-green">+${e.cant} unidades</span></td><td style="font-family:'JetBrains Mono',monospace;font-weight:600">${e.costo>0?fmt(e.costo):'—'}</td><td style="color:var(--muted);font-size:12px">${e.nota||'—'}</td>${isAdmin()?`<td><button class="btn btn-danger btn-icon" onclick="eliminarEntrada('${e._key}','${e.prodId}',${e.cant})">✕</button></td>`:''}</tr>`;}).join('')}</tbody></table>`;
+    el.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Producto</th><th>Cantidad</th>${isAdmin()?'<th>Costo</th>':''}<th>Registrado por</th><th>Nota</th>${isAdmin()?'<th></th>':''}</tr></thead><tbody>${lista.map(e=>{
+      const p=getProd(e.prodId);
+      const quien=e.registradoPorLabel||e.registradoPor||'—';
+      const esContador=quien.includes('Marcos')||e.registradoPorRol==='contador';
+      return`<tr>
+        <td style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;white-space:nowrap">${e.fecha}<br>${e.hora||''}</td>
+        <td style="font-weight:600">${p?p.emoji+' '+p.nombre:e.prodId}</td>
+        <td><span class="pill pill-green">+${e.cant} unidades</span></td>
+        ${isAdmin()?`<td style="font-family:'JetBrains Mono',monospace;font-weight:600">${e.costo>0?fmt(e.costo):'—'}</td>`:''}
+        <td><span class="pill ${esContador?'pill-amber':'pill-purple'}" title="Registrado por: ${quien}">${quien}</span></td>
+        <td style="color:var(--muted);font-size:12px">${e.nota||'—'}</td>
+        ${isAdmin()?`<td><button class="btn btn-danger btn-icon" title="Eliminar entrada (descuenta stock)" onclick="eliminarEntrada('${e._key}','${e.prodId}',${e.cant})">✕</button></td>`:''}
+      </tr>`;
+    }).join('')}</tbody></table></div>`;
   });
 }
 
 function registrarEntrada(){
   const prodId=document.getElementById('es-prod').value;
   const cant=parseInt(document.getElementById('es-cant').value)||0;
-  const costo=parseFloat(document.getElementById('es-costo').value)||0;
+  const costoEl=document.getElementById('es-costo');
+  const costo=costoEl?parseFloat(costoEl.value)||0:0;
   const nota=document.getElementById('es-nota').value.trim();
   if(!prodId){toast('⚠️ Seleccioná un producto');return;}
   if(cant<=0){toast('⚠️ Cantidad inválida');return;}
+  const registradoPorLabel=currentRole==='admin'?'Administrador':'Lic. Marcos';
   db.ref('stock/'+prodId).once('value').then(snap=>{
     const actual=snap.val()||0;
     const now=new Date();
     const updates={};
     updates['stock/'+prodId]=actual+cant;
-    updates['entradas/'+db.ref('entradas').push().key]={fecha:todayStr(),hora:now.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'}),prodId,cant,costo,nota,registradoPor:currentRole};
-    db.ref().update(updates).then(()=>{toast(`✅ +${cant} unidades de ${getProd(prodId).nombre}`);document.getElementById('es-prod').value='';document.getElementById('es-cant').value='';document.getElementById('es-costo').value='';document.getElementById('es-nota').value='';loadEntradas();}).catch(()=>toast('❌ Error al registrar la entrada'));
+    updates['entradas/'+db.ref('entradas').push().key]={
+      fecha:todayStr(),
+      hora:now.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'}),
+      prodId,cant,costo,nota,
+      registradoPor:registradoPorLabel,
+      registradoPorLabel,
+      registradoPorRol:currentRole,
+      ts:Date.now()
+    };
+    db.ref().update(updates).then(()=>{
+      toast(`✅ +${cant} unidades de ${getProd(prodId).nombre}`);
+      document.getElementById('es-prod').value='';
+      document.getElementById('es-cant').value='';
+      if(costoEl)costoEl.value='';
+      document.getElementById('es-nota').value='';
+      loadEntradas();
+      if(isAdmin())checkNotificacionesBadge();
+    }).catch(()=>toast('❌ Error al registrar la entrada'));
   });
 }
 
 function eliminarEntrada(key,prodId,cant){
-  if(!confirm('¿Eliminar esta entrada? El stock se descontará.'))return;
+  if(!isAdmin()){toast('❌ Solo el administrador puede eliminar entradas');return;}
+  if(!confirm('¿Eliminar esta entrada? El stock se descontará en '+cant+' unidades.'))return;
   db.ref('stock/'+prodId).once('value').then(snap=>{
-    const updates={};updates['entradas/'+key]=null;updates['stock/'+prodId]=Math.max(0,(snap.val()||0)-cant);
-    db.ref().update(updates).then(()=>{toast('🗑 Entrada eliminada');loadEntradas();});
+    const updates={};
+    updates['entradas/'+key]=null;
+    updates['stock/'+prodId]=Math.max(0,(snap.val()||0)-cant);
+    db.ref().update(updates).then(()=>{toast('🗑 Entrada eliminada y stock corregido');loadEntradas();checkNotificacionesBadge();});
   });
 }
 
@@ -1552,6 +1614,82 @@ function exportTXT(){
   _repMovs.forEach(m=>{const items=m.items||(m.prodId?[{prodId:m.prodId,cant:m.cant}]:[]);const prodStr=m.tipo==='egreso'?m.descripcion||m.nota||'Egreso':items.map(i=>{const p=getProd(i.prodId);return p?p.nombre+' x'+i.cant:'—';}).join(', ');txt+=`${m.fecha} ${m.hora||''} | ${m.nombre||''} (${m.codigo||''}) | ${m.tipo} | ${prodStr} | Bs. ${(m.total||0).toFixed(2)} | ${m.metodo||''}\n`;});
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));a.download=`nutriwave-${_repDesde}-${_repHasta}.txt`;a.click();
 }
+
+// ── Notificaciones de entradas (solo admin) ──────────────────────────────────
+function initNotificaciones(){
+  const wrap=document.getElementById('notif-wrap');
+  if(wrap)wrap.style.display='block';
+  checkNotificacionesBadge();
+  db.ref('entradas').on('child_added',()=>{ if(isAdmin())checkNotificacionesBadge(); });
+}
+
+function checkNotificacionesBadge(){
+  const lastSeen=parseInt(localStorage.getItem('nw-last-seen-entradas')||'0');
+  db.ref('entradas').once('value').then(snap=>{
+    let count=0;
+    snap.forEach(s=>{
+      const v=s.val();
+      if(v&&v.ts&&v.ts>lastSeen&&v.registradoPorRol!=='admin')count++;
+    });
+    const badge=document.getElementById('notif-badge');
+    if(!badge)return;
+    if(count>0){badge.textContent=count>99?'99+':count;badge.style.display='flex';}
+    else{badge.style.display='none';}
+  });
+}
+
+function verNotificaciones(){
+  const panel=document.getElementById('notif-panel');
+  if(!panel)return;
+  if(panel.style.display!=='none'){panel.style.display='none';return;}
+  // Marcar como vistas
+  localStorage.setItem('nw-last-seen-entradas',Date.now().toString());
+  const badge=document.getElementById('notif-badge');
+  if(badge)badge.style.display='none';
+  panel.innerHTML='<div style="font-size:12px;color:var(--muted);padding:10px;text-align:center">⏳ Cargando...</div>';
+  panel.style.display='block';
+  db.ref('entradas').once('value').then(snap=>{
+    const lista=[];
+    snap.forEach(s=>{const v=s.val();if(v)lista.push({...v,_key:s.key});});
+    lista.sort((a,b)=>(b.ts||0)-(a.ts||0));
+    const recientes=lista.slice(0,20);
+    if(!recientes.length){
+      panel.innerHTML='<div style="text-align:center;padding:24px;color:var(--faint);font-size:13px">Sin entradas registradas</div>';
+      return;
+    }
+    panel.innerHTML=`
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+        <span style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)">📥 Entradas recientes</span>
+        <button class="btn btn-ghost btn-sm" onclick="goTo('entrada-stock');document.getElementById('notif-panel').style.display='none'">Ver historial →</button>
+      </div>
+      ${recientes.map(e=>{
+        const p=getProd(e.prodId);
+        const quien=e.registradoPorLabel||e.registradoPor||'—';
+        const esContador=e.registradoPorRol==='contador'||quien.includes('Marcos');
+        return`<div style="padding:9px 0;border-bottom:1px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+            <span style="font-weight:700;font-size:13px">${p?p.emoji+' '+p.nombre:e.prodId}</span>
+            <span class="pill pill-green" style="font-size:11px">+${e.cant} uds.</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-size:11px;color:var(--muted)">📅 ${e.fecha} ${e.hora||''}</span>
+            <span class="pill ${esContador?'pill-amber':'pill-purple'}" style="font-size:10px;padding:2px 7px">${quien}</span>
+          </div>
+          ${e.nota?`<div style="font-size:11px;color:var(--muted);margin-top:2px">📝 ${e.nota}</div>`:''}
+        </div>`;
+      }).join('')}
+    `;
+  });
+}
+
+// Cerrar panel de notificaciones al hacer click fuera
+document.addEventListener('click',function(e){
+  const wrap=document.getElementById('notif-wrap');
+  const panel=document.getElementById('notif-panel');
+  if(wrap&&panel&&panel.style.display!=='none'&&!wrap.contains(e.target)){
+    panel.style.display='none';
+  }
+});
 
 // ── Modo oscuro ──────────────────────────────────────────────────────────────
 function initDarkMode(){
