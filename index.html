@@ -1323,44 +1323,49 @@ function renderDeudas(){
   loadDeudas();
 }
 
+// Caché global de deudas para acciones (evita re-fetch al hacer click en botones)
+let _deudasCache={};
+
 function loadDeudas(){
   const filtro=document.getElementById('filtro-deuda')?.value||'';
   const buscar=(document.getElementById('buscar-deuda')?.value||'').toLowerCase().trim();
-  // Lee AMBAS colecciones: deudas/ (registros formales) + movimientos/ (tipo='deuda' sin registro formal)
-  Promise.all([
-    db.ref('deudas').once('value'),
-    db.ref('movimientos').once('value')
-  ]).then(([deudasSnap,movsSnap])=>{
-    // Construir mapa de deudas formales y sus movId referenciados
+  const el=document.getElementById('deudas-list');
+  if(!el)return;
+  el.innerHTML='<div class="loading">⏳ Cargando...</div>';
+
+  // Primero lee deudas/ formales, luego intenta enriquecer con movimientos/
+  db.ref('deudas').once('value').then(deudasSnap=>{
     const deudaMap={};
     const movIdsEnDeudas=new Set();
     deudasSnap.forEach(s=>{
       const v=s.val();
-      if(v){deudaMap[s.key]={...v,_key:s.key};if(v.movId)movIdsEnDeudas.add(v.movId);}
-    });
-    // Agregar movimientos tipo='deuda' que NO tienen entrada formal en deudas/
-    movsSnap.forEach(s=>{
-      const v=s.val();
-      if(v&&v.tipo==='deuda'&&!movIdsEnDeudas.has(s.key)){
-        deudaMap['_mov_'+s.key]={
-          _key:'_mov_'+s.key,_synthetic:true,
-          fecha:v.fecha,hora:v.hora,nombre:v.nombre||'—',codigo:v.codigo||'',
-          items:v.items||(v.prodId?[{prodId:v.prodId,cant:v.cant}]:[]),
-          total:v.total||0,saldo:v.total||0,
-          nota:v.nota||'',estado:'pendiente',
-          registradoPor:v.registradoPor,movId:s.key
-        };
+      if(v&&(v.nombre||v.items)){
+        deudaMap[s.key]={...v,_key:s.key};
+        if(v.movId)movIdsEnDeudas.add(v.movId);
       }
     });
-    let lista=Object.values(deudaMap);
-    // Ordenar: más antiguas primero (prioriza cobros pendientes)
-    lista.sort((a,b)=>((a.fecha||'')+(a.hora||'')).localeCompare((b.fecha||'')+(b.hora||'')));
-    // Filtros
-    if(filtro)lista=lista.filter(d=>(d.estado||'pendiente')===filtro);
-    if(buscar)lista=lista.filter(d=>(d.nombre||'').toLowerCase().includes(buscar)||(d.codigo||'').toLowerCase().includes(buscar));
-    const el=document.getElementById('deudas-list');if(!el)return;
-    // KPIs
+    // Ahora lee movimientos para rescatar deudas históricas sin entrada formal
+    return db.ref('movimientos').once('value').then(movsSnap=>{
+      movsSnap.forEach(s=>{
+        const v=s.val();
+        if(v&&v.tipo==='deuda'&&!movIdsEnDeudas.has(s.key)){
+          deudaMap['_mov_'+s.key]={
+            _key:'_mov_'+s.key,_synthetic:true,
+            fecha:v.fecha,hora:v.hora||'',
+            nombre:v.nombre||'—',codigo:v.codigo||'',
+            items:v.items||(v.prodId?[{prodId:v.prodId,cant:v.cant||1}]:[]),
+            total:v.total||0,saldo:v.total||0,
+            nota:v.nota||'',estado:'pendiente',
+            registradoPor:v.registradoPor,movId:s.key
+          };
+        }
+      });
+      return deudaMap;
+    }).catch(()=>deudaMap); // si falla movimientos, igual muestra las de deudas/
+  }).then(deudaMap=>{
+    _deudasCache=deudaMap;
     const todas=Object.values(deudaMap);
+    // KPIs
     const pendTot=todas.filter(d=>d.estado!=='pagada'&&d.estado!=='devuelta');
     const totalAdeudado=pendTot.reduce((s,d)=>s+(d.saldo||0),0);
     const kpiEl=document.getElementById('deudas-kpi');
@@ -1372,45 +1377,68 @@ function loadDeudas(){
         <div class="kpi-card"><div class="kpi-icon">✅</div><div class="kpi-label">Pagadas</div><div class="kpi-val" style="color:var(--teal-dark)">${todas.filter(d=>d.estado==='pagada').length}</div></div>
       </div>`;
     }
-    if(!lista.length){el.innerHTML='<div class="empty"><span class="empty-icon">💳</span><p>Sin deudas en esta categoría.</p></div>';return;}
-    el.innerHTML=lista.map(d=>{
-      const items=d.items||(d.prodId?[{prodId:d.prodId,cant:d.cant}]:[]);
-      const prodStr=items.map(i=>{const p=getProd(i.prodId);return p?p.emoji+' '+p.nombre+' × '+i.cant+' unidades':'—';}).join(', ');
-      const estado=d.estado||'pendiente';
-      const estadoClass=estado==='pagada'?'pagada':estado==='parcial'?'parcial':estado==='devuelta'?'devuelta':'pendiente';
-      const estadoPill=estado==='pagada'?'<span class="pill pill-green">✅ Pagada</span>':estado==='devuelta'?'<span class="pill pill-blue">↩ Devuelta</span>':estado==='parcial'?'<span class="pill pill-amber">⏳ Parcial</span>':'<span class="pill pill-red">❌ Pendiente</span>';
-      const pagosHtml=d.pagos?Object.values(d.pagos).sort((a,b)=>((a.fecha||'')+(a.hora||'')).localeCompare((b.fecha||'')+(b.hora||''))).map(p2=>`<div style="font-size:11px;color:var(--muted);margin-top:4px;padding:6px 10px;background:var(--bg);border-radius:6px">✓ ${p2.fecha} ${p2.hora||''} — <strong>${fmt(p2.monto)}</strong> [${p2.metodo}]${p2.nota?' — '+p2.nota:''}</div>`).join(''):'';
-      const pagadoHasta=(d.total||0)-(d.saldo||0);
-      const puedeAccionar=canEdit()&&estado!=='pagada'&&estado!=='devuelta';
-      const itemsJSON=JSON.stringify(items).replace(/'/g,"\\'");
-      return`<div class="deuda-card ${estadoClass}">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
-          <div style="flex:1;min-width:0">
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
-              <span style="font-weight:800;font-size:15px">${d.nombre||'—'}</span>
-              <span style="font-size:11px;color:var(--purple);font-family:'JetBrains Mono',monospace;font-weight:700">${d.codigo||''}</span>
-              ${estadoPill}
+    // Filtrar y ordenar para mostrar
+    let lista=[...todas];
+    lista.sort((a,b)=>((a.fecha||'')+(a.hora||'')).localeCompare((b.fecha||'')+(b.hora||'')));
+    if(filtro)lista=lista.filter(d=>(d.estado||'pendiente')===filtro);
+    if(buscar)lista=lista.filter(d=>(d.nombre||'').toLowerCase().includes(buscar)||(d.codigo||'').toLowerCase().includes(buscar));
+    const elNow=document.getElementById('deudas-list');if(!elNow)return;
+    if(!lista.length){elNow.innerHTML='<div class="empty"><span class="empty-icon">💳</span><p>Sin deudas en esta categoría.</p></div>';return;}
+    elNow.innerHTML=lista.map(d=>{
+      try{
+        const items=d.items||(d.prodId?[{prodId:d.prodId,cant:d.cant||1}]:[]);
+        const prodStr=items.map(i=>{const p=getProd(i.prodId);return p?p.emoji+' '+p.nombre+' × '+i.cant+' unidades':'—';}).join(', ');
+        const estado=d.estado||'pendiente';
+        const estadoClass=estado==='pagada'?'pagada':estado==='parcial'?'parcial':estado==='devuelta'?'devuelta':'pendiente';
+        const estadoPill=estado==='pagada'?'<span class="pill pill-green">✅ Pagada</span>':estado==='devuelta'?'<span class="pill pill-blue">↩ Devuelta</span>':estado==='parcial'?'<span class="pill pill-amber">⏳ Parcial</span>':'<span class="pill pill-red">❌ Pendiente</span>';
+        const pagosHtml=d.pagos?Object.values(d.pagos).sort((a,b)=>((a.fecha||'')+(a.hora||'')).localeCompare((b.fecha||'')+(b.hora||''))).map(p2=>`<div style="font-size:11px;color:var(--muted);margin-top:4px;padding:6px 10px;background:var(--bg);border-radius:6px">✓ ${p2.fecha} ${p2.hora||''} — <strong>${fmt(p2.monto)}</strong> [${p2.metodo}]${p2.nota?' — '+p2.nota:''}</div>`).join(''):'';
+        const pagadoHasta=(d.total||0)-(d.saldo||0);
+        const puedeAccionar=canEdit()&&estado!=='pagada'&&estado!=='devuelta';
+        // Usar data-key para evitar problemas de caracteres especiales en onclick
+        const keyAttr=d._key.replace(/'/g,"\\'");
+        return`<div class="deuda-card ${estadoClass}">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
+                <span style="font-weight:800;font-size:15px">${d.nombre||'—'}</span>
+                <span style="font-size:11px;color:var(--purple);font-family:'JetBrains Mono',monospace;font-weight:700">${d.codigo||''}</span>
+                ${estadoPill}
+              </div>
+              <div style="font-size:12px;color:var(--muted);margin-bottom:4px">📅 ${d.fecha||'—'} ${d.hora||''}</div>
+              <div style="font-size:13px;font-weight:600;margin-bottom:4px">${prodStr}</div>
+              ${d.nota?`<div style="font-size:12px;color:var(--muted)">📝 ${d.nota}</div>`:''}
+              ${pagosHtml}
             </div>
-            <div style="font-size:12px;color:var(--muted);margin-bottom:4px">📅 ${d.fecha||'—'} ${d.hora||''}</div>
-            <div style="font-size:13px;font-weight:600;margin-bottom:4px">${prodStr}</div>
-            ${d.nota?`<div style="font-size:12px;color:var(--muted)">📝 ${d.nota}</div>`:''}
-            ${pagosHtml}
+            <div style="text-align:right;min-width:130px;flex-shrink:0">
+              <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:2px">SALDO PENDIENTE</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:800;color:var(--red)">${fmt(d.saldo||0)}</div>
+              <div style="font-size:11px;color:var(--faint)">de ${fmt(d.total||0)}</div>
+              ${pagadoHasta>0.01?`<div style="font-size:11px;color:var(--teal-dark);font-weight:600;margin-top:3px">✓ Pagado: ${fmt(pagadoHasta)}</div>`:''}
+            </div>
           </div>
-          <div style="text-align:right;min-width:130px;flex-shrink:0">
-            <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:2px">SALDO PENDIENTE</div>
-            <div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:800;color:var(--red)">${fmt(d.saldo||0)}</div>
-            <div style="font-size:11px;color:var(--faint)">de ${fmt(d.total||0)}</div>
-            ${pagadoHasta>0.01?`<div style="font-size:11px;color:var(--teal-dark);font-weight:600;margin-top:3px">✓ Pagado: ${fmt(pagadoHasta)}</div>`:''}
-          </div>
-        </div>
-        ${puedeAccionar?`<div class="btn-row" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
-          <button class="btn btn-teal btn-sm" onclick="abrirPago('${d._key}')">💳 Registrar pago</button>
-          <button class="btn btn-ghost btn-sm" onclick="devolverDeuda('${d._key}')">↩ Producto devuelto</button>
-          ${isAdmin()?`<button class="btn btn-danger btn-sm" onclick="eliminarDeuda('${d._key}',${JSON.stringify(items)},${estado==='pendiente'?1:0})">✕ Eliminar</button>`:''}
-        </div>`:''}
-      </div>`;
+          ${puedeAccionar?`<div class="btn-row" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
+            <button class="btn btn-teal btn-sm" onclick="abrirPago('${keyAttr}')">💳 Registrar pago</button>
+            <button class="btn btn-ghost btn-sm" onclick="devolverDeuda('${keyAttr}')">↩ Producto devuelto</button>
+            ${isAdmin()?`<button class="btn btn-danger btn-sm" onclick="eliminarDeudaConItems('${keyAttr}',${estado==='pendiente'?1:0})">✕ Eliminar</button>`:''}
+          </div>`:''}
+        </div>`;
+      }catch(err){
+        console.error('Error renderizando deuda',d._key,err);
+        return`<div class="deuda-card pendiente"><p style="color:var(--red);font-size:12px">⚠️ Error al mostrar esta deuda (${d._key})</p></div>`;
+      }
     }).join('');
+  }).catch(err=>{
+    console.error('Error cargando deudas:',err);
+    const elErr=document.getElementById('deudas-list');
+    if(elErr)elErr.innerHTML='<div class="empty"><span class="empty-icon">⚠️</span><p>Error al cargar deudas. Revisá la conexión y recargá la página.</p></div>';
   });
+}
+
+// Wrapper que usa el caché para evitar pasar JSON por onclick (rompe HTML)
+function eliminarDeudaConItems(key,reponerStock){
+  const d=_deudasCache[key];
+  const items=d?d.items||(d.prodId?[{prodId:d.prodId,cant:d.cant||1}]:[]):[];
+  eliminarDeuda(key,items,reponerStock);
 }
 
 function togglePagoMetodo(){
