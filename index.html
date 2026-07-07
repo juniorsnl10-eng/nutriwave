@@ -6,7 +6,7 @@
 <title>NutriWave — Gestión Interna</title>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
@@ -666,7 +666,8 @@ function renderDashboard(fechaVer){
         digital+=m.montoQR||0;
       }
     });
-    movs.filter(m=>m.tipo==='pago-deuda').forEach(m=>{
+    const pagosDeudaDia=movs.filter(m=>m.tipo==='pago-deuda');
+    pagosDeudaDia.forEach(m=>{
       if(m.metodo==='Efectivo') efectivo+=m.total||0;
       else if(m.metodo==='QR') digital+=m.total||0;
       else if(m.metodo==='MixtoEfectivoQR'){efectivo+=m.montoEfectivo||0;digital+=m.montoQR||0;}
@@ -703,11 +704,12 @@ function renderDashboard(fechaVer){
           <input type="date" value="${hoy}" max="${todayStr()}" onchange="renderDashboard(this.value)" style="font-size:13px;padding:7px 12px;border-radius:8px;width:auto;border:1.5px solid var(--purple-mid);font-weight:600">
           ${!esHoy?`<button class="btn btn-ghost btn-sm" onclick="renderDashboard()">Hoy →</button>`:''}
           <span style="font-size:13px;font-weight:700;color:var(--purple)">${esHoy?'📅 Hoy':'📅 '+hoy}</span>
+          ${canEdit()?`<button class="btn btn-teal btn-sm" onclick="exportarDiaExcel('${hoy}')" title="Descargar reporte Excel del día visible">📗 Exportar a Excel</button>`:''}
         </div>
         ${isAdmin()?`<button class="btn btn-danger btn-sm" onclick="borrarDia('${hoy}')">🗑 Borrar datos de este día</button>`:''}
       </div>
       <div class="kpi-row">
-        <div class="kpi-card"><div class="kpi-icon">💰</div><div class="kpi-label">${esHoy?'Ingresos hoy':'Ingresos del día'}</div><div class="kpi-val" style="color:var(--teal-dark)">${fmt(ingresos)}</div><div class="kpi-sub">${ventas.length} venta${ventas.length!==1?'s':''}${apartadosDia.length?' + '+apartadosDia.length+' apartado'+(apartadosDia.length!==1?'s':''):''}${otrosIngresosDia.length?' + '+otrosIngresosDia.length+' otro'+(otrosIngresosDia.length!==1?'s':'')+' ing.':''}</div></div>
+        <div class="kpi-card"><div class="kpi-icon">💰</div><div class="kpi-label">${esHoy?'Ingresos hoy':'Ingresos del día'}</div><div class="kpi-val" style="color:var(--teal-dark)">${fmt(ingresos)}</div><div class="kpi-sub">${ventas.length} venta${ventas.length!==1?'s':''}${apartadosDia.length?' + '+apartadosDia.length+' apartado'+(apartadosDia.length!==1?'s':''):''}${pagosDeudaDia.length?' + '+pagosDeudaDia.length+' cobro'+(pagosDeudaDia.length!==1?'s':'')+' de deuda':''}${otrosIngresosDia.length?' + '+otrosIngresosDia.length+' otro'+(otrosIngresosDia.length!==1?'s':'')+' ing.':''}</div></div>
         <div class="kpi-card"><div class="kpi-icon">💵</div><div class="kpi-label">Efectivo cobrado</div><div class="kpi-val" style="color:var(--purple)">${fmt(efectivo)}</div><div class="kpi-sub">entrada bruta</div></div>
         <div class="kpi-card"><div class="kpi-icon">🏦</div><div class="kpi-label">${esHoy?'Efectivo en caja':'Efectivo neto'}</div><div class="kpi-val" style="color:var(--teal-dark)">${fmt(efectivoEnCaja)}</div><div class="kpi-sub">efectivo − egresos</div></div>
         <div class="kpi-card"><div class="kpi-icon">📱</div><div class="kpi-label">Cobrado por QR</div><div class="kpi-val" style="color:var(--blue)">${fmt(digital)}</div><div class="kpi-sub">transferencias</div></div>
@@ -1823,7 +1825,7 @@ function eliminarApartado(key,items){
   });
 }
 
-let _repMovs=[],_repDeudas=[],_repDesde='',_repHasta='';
+let _repMovs=[],_repDeudas=[],_repDesde='',_repHasta='',_repCalc=null;
 
 function renderReportes(){
   const hoy=todayStr();
@@ -1914,16 +1916,19 @@ function generarReporte(){
     const cobD=pagosD.reduce((s,m)=>s+m.total,0);
     const totalEgr=egresos.reduce((s,m)=>s+(m.monto||m.total||0),0);
     const unidades=_repMovs.filter(m=>m.tipo!=='pago-deuda'&&m.tipo!=='egreso'&&m.tipo!=='cambio-producto'&&m.tipo!=='devolucion-deuda').reduce((s,m)=>s+(m.items||(m.prodId?[{cant:m.cant}]:[])).reduce((a,i)=>a+(i.cant||0),0),0);
-    const dPend=_repDeudas.filter(d=>d.estado!=='pagada').reduce((s,d)=>s+d.saldo,0);
+    const dPend=_repDeudas.filter(d=>d.estado!=='pagada'&&d.estado!=='devuelta').reduce((s,d)=>s+(d.saldo||0),0);
+    const totalRecibido=efectivo+digital;
+    _repCalc={efectivo,digital,totalV,cobD,totalOtrosIng,totalEgr,dPend,totalRecibido,ventasCount:ventas.length,apartCount:apartadosRep.length,otrosCount:otrosIng.length,pagosCount:pagosD.length};
     document.getElementById('rep-kpis').innerHTML=`
-      <div class="kpi-card"><div class="kpi-icon">💰</div><div class="kpi-label">Ingresos totales</div><div class="kpi-val" style="color:var(--teal-dark)">${fmt(totalV)}</div><div class="kpi-sub">${ventas.length} ventas${apartadosRep.length?' + '+apartadosRep.length+' apart.':''}</div></div>
-      <div class="kpi-card"><div class="kpi-icon">📦</div><div class="kpi-label">Unidades salidas</div><div class="kpi-val">${unidades}</div></div>
-      <div class="kpi-card"><div class="kpi-icon">💵</div><div class="kpi-label">Efectivo</div><div class="kpi-val" style="color:var(--purple)">${fmt(efectivo)}</div></div>
-      <div class="kpi-card"><div class="kpi-icon">📱</div><div class="kpi-label">QR</div><div class="kpi-val" style="color:var(--blue)">${fmt(digital)}</div></div>
-      <div class="kpi-card"><div class="kpi-icon">💸</div><div class="kpi-label">Egresos</div><div class="kpi-val" style="color:var(--red)">${fmt(totalEgr)}</div></div>
-      <div class="kpi-card"><div class="kpi-icon">✅</div><div class="kpi-label">Cobro deudas</div><div class="kpi-val" style="color:var(--teal-dark)">${fmt(cobD)}</div></div>
+      <div class="kpi-card"><div class="kpi-icon">💰</div><div class="kpi-label">Ingresos por ventas</div><div class="kpi-val" style="color:var(--teal-dark)">${fmt(totalV)}</div><div class="kpi-sub">${ventas.length} ventas${apartadosRep.length?' + '+apartadosRep.length+' apart.':''} · sin deudas ni otros</div></div>
+      <div class="kpi-card"><div class="kpi-icon">✅</div><div class="kpi-label">Cobro deudas</div><div class="kpi-val" style="color:var(--teal-dark)">${fmt(cobD)}</div><div class="kpi-sub">${pagosD.length} pago${pagosD.length!==1?'s':''} recibido${pagosD.length!==1?'s':''}</div></div>
       ${otrosIng.length?`<div class="kpi-card"><div class="kpi-icon">🪙</div><div class="kpi-label">Otros ingresos</div><div class="kpi-val" style="color:var(--teal-dark)">${fmt(totalOtrosIng)}</div><div class="kpi-sub">${otrosIng.length} registro${otrosIng.length!==1?'s':''}</div></div>`:''}
-      <div class="kpi-card"><div class="kpi-icon">⚠️</div><div class="kpi-label">Deudas pend.</div><div class="kpi-val" style="color:var(--red)">${fmt(dPend)}</div></div>
+      <div class="kpi-card" style="border-color:var(--teal)"><div class="kpi-icon">🏦</div><div class="kpi-label">Total dinero recibido</div><div class="kpi-val" style="color:var(--teal-dark)">${fmt(totalRecibido)}</div><div class="kpi-sub">efectivo + QR (todo incluido)</div></div>
+      <div class="kpi-card"><div class="kpi-icon">💵</div><div class="kpi-label">Efectivo</div><div class="kpi-val" style="color:var(--purple)">${fmt(efectivo)}</div><div class="kpi-sub">${cobD||totalOtrosIng?'incluye deudas cobradas y otros':'dinero recibido'}</div></div>
+      <div class="kpi-card"><div class="kpi-icon">📱</div><div class="kpi-label">QR</div><div class="kpi-val" style="color:var(--blue)">${fmt(digital)}</div><div class="kpi-sub">${cobD||totalOtrosIng?'incluye deudas cobradas y otros':'transferencias'}</div></div>
+      <div class="kpi-card"><div class="kpi-icon">💸</div><div class="kpi-label">Egresos</div><div class="kpi-val" style="color:var(--red)">-${fmt(totalEgr)}</div><div class="kpi-sub">salidas de caja</div></div>
+      <div class="kpi-card"><div class="kpi-icon">📦</div><div class="kpi-label">Unidades salidas</div><div class="kpi-val">${unidades}</div><div class="kpi-sub">productos entregados</div></div>
+      <div class="kpi-card"><div class="kpi-icon">⚠️</div><div class="kpi-label">Deudas pend.</div><div class="kpi-val" style="color:var(--red)">${fmt(dPend)}</div><div class="kpi-sub">generadas en el período</div></div>
     `;
     const porProd={};
     _repMovs.filter(m=>m.tipo!=='pago-deuda'&&m.tipo!=='egreso'&&m.tipo!=='cambio-producto'&&m.tipo!=='devolucion-deuda').forEach(m=>{
@@ -1931,11 +1936,13 @@ function generarReporte(){
         if(!i.prodId)return;
         if(!porProd[i.prodId])porProd[i.prodId]={cant:0,ventas:0};
         porProd[i.prodId].cant+=i.cant;
-        if(m.tipo==='venta')porProd[i.prodId].ventas+=(i.subtotal||i.cant*i.precio||0);
+        if(m.tipo==='venta'||m.tipo==='apartado')porProd[i.prodId].ventas+=(i.subtotal||i.cant*i.precio||0);
       });
     });
-    document.getElementById('rep-prods').innerHTML=Object.entries(porProd).sort((a,b)=>b[1].ventas-a[1].ventas).map(([id,d])=>{const p=getProd(id);return`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)"><span style="font-weight:600;font-size:13px">${p?p.emoji+' '+p.nombre:id}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px"><span style="color:var(--muted)">${d.cant} unidades &nbsp;</span><span style="color:var(--teal-dark);font-weight:700">${fmt(d.ventas)}</span></span></div>`;}).join('')||'<div class="empty"><p>Sin datos.</p></div>';
-    const porMet={};ventas.forEach(m=>{porMet[m.metodo]=(porMet[m.metodo]||0)+m.total;});
+    const sumPorProd=Object.values(porProd).reduce((s,d)=>s+d.ventas,0);
+    const notaDescuento=Math.abs(sumPorProd-totalV)>0.02?`<div style="font-size:11px;color:var(--amber);padding:10px 0 0;font-weight:600">ℹ️ El desglose por producto suma ${fmt(sumPorProd)} (precios de lista). Los ingresos reales fueron ${fmt(totalV)} porque algunas ventas tuvieron descuento.</div>`:'';
+    document.getElementById('rep-prods').innerHTML=(Object.entries(porProd).sort((a,b)=>b[1].ventas-a[1].ventas).map(([id,d])=>{const p=getProd(id);return`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)"><span style="font-weight:600;font-size:13px">${p?p.emoji+' '+p.nombre:id}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px"><span style="color:var(--muted)">${d.cant} unidades &nbsp;</span><span style="color:var(--teal-dark);font-weight:700">${fmt(d.ventas)}</span></span></div>`;}).join('')||'<div class="empty"><p>Sin datos.</p></div>')+notaDescuento;
+    const porMet={};[...ventas,...apartadosRep].forEach(m=>{porMet[m.metodo]=(porMet[m.metodo]||0)+(m.total||0);});
     document.getElementById('rep-metodos').innerHTML=Object.entries(porMet).map(([met,tot])=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)"><span style="font-weight:600;font-size:13px">${met}</span><span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--teal-dark)">${fmt(tot)}</span></div>`).join('')||'<div class="empty"><p>Sin datos.</p></div>';
     const totalSoloVentas=ventas.reduce((s,m)=>s+m.total,0);
     const totalSoloApartados=apartadosRep.reduce((s,m)=>s+m.total,0);
@@ -1952,27 +1959,290 @@ function exportExcel(){
   _repMovs.forEach(m=>{const items=m.items||(m.prodId?[{prodId:m.prodId,cant:m.cant}]:[]);const prodStr=m.tipo==='egreso'?m.descripcion||m.nota||'Egreso':m.tipo==='otro-ingreso'?'OTRO INGRESO: '+(m.descripcion||m.nota||''):items.map(i=>{const p=getProd(i.prodId);return p?p.nombre+' x'+i.cant:'—';}).join(' | ');movRows.push([m.fecha,m.hora||'',m.nombre||'',m.codigo||'',m.tipo==='otro-ingreso'?'Otros Ingresos':m.tipo,prodStr,m.total||0,m.metodo||'',m.nota||'']);});
   const ws1=XLSX.utils.aoa_to_sheet(movRows);ws1['!cols']=[10,8,18,10,12,30,12,14,20].map(w=>({wch:w}));
   XLSX.utils.book_append_sheet(wb,ws1,'Movimientos');
-  const ventasEx=_repMovs.filter(m=>m.tipo==='venta');
-  const apartadosEx=_repMovs.filter(m=>m.tipo==='apartado');
-  const ingresosEx=[...ventasEx,...apartadosEx];
-  const egresos=_repMovs.filter(m=>m.tipo==='egreso');
-  const efEx=ingresosEx.filter(m=>m.metodo==='Efectivo').reduce((s,m)=>s+m.total,0)+ingresosEx.filter(m=>m.metodo==='MixtoEfectivoQR'||m.metodo==='MixtoRegalia').reduce((s,m)=>s+(m.montoEfectivo||0),0);
-  const qrEx=ingresosEx.filter(m=>m.metodo==='QR').reduce((s,m)=>s+m.total,0)+ingresosEx.filter(m=>m.metodo==='MixtoEfectivoQR'||m.metodo==='MixtoRegalia').reduce((s,m)=>s+(m.montoQR||0),0);
-  const otrosIngEx=_repMovs.filter(m=>m.tipo==='otro-ingreso');
-  const otrosEfEx=otrosIngEx.reduce((s,m)=>s+(m.metodo==='Efectivo'?(m.total||0):(m.montoEfectivo||0)),0);
-  const otrosQrEx=otrosIngEx.reduce((s,m)=>s+(m.metodo==='QR'?(m.total||0):(m.montoQR||0)),0);
-  const sumRows=[['RESUMEN NUTRIWAVE',`${_repDesde} al ${_repHasta}`],[],['Total ingresos (ventas + apartados)',ingresosEx.reduce((s,m)=>s+m.total,0)],['Otros ingresos (no ventas)',otrosIngEx.reduce((s,m)=>s+(m.total||0),0)],['Efectivo (incluye otros ingresos)',efEx+otrosEfEx],['QR (incluye otros ingresos)',qrEx+otrosQrEx],['Total egresos',egresos.reduce((s,m)=>s+(m.monto||m.total||0),0)],[],[' DEUDAS'],['Nombre','Código','Productos','Total','Saldo','Estado'],..._repDeudas.map(d=>{const items=d.items||(d.prodId?[{prodId:d.prodId}]:[]);return[d.nombre,d.codigo,items.map(i=>{const p=getProd(i.prodId);return p?p.nombre:'—';}).join(', '),d.total,d.saldo,d.estado];})];
+  // Usa exactamente los mismos valores calculados que muestra el reporte en pantalla
+  const rc=_repCalc||{efectivo:0,digital:0,totalV:0,cobD:0,totalOtrosIng:0,totalEgr:0,dPend:0,totalRecibido:0,ventasCount:0,apartCount:0,otrosCount:0,pagosCount:0};
+  const sumRows=[
+    ['RESUMEN NUTRIWAVE',`${_repDesde} al ${_repHasta}`],
+    [],
+    ['DINERO RECIBIDO EN EL PERÍODO',''],
+    [`Ingresos por ventas (${rc.ventasCount} ventas${rc.apartCount?' + '+rc.apartCount+' apartados':''})`,rc.totalV],
+    [`Cobros de deudas (${rc.pagosCount} pago${rc.pagosCount!==1?'s':''})`,rc.cobD],
+    ...(rc.otrosCount?[[`Otros ingresos (${rc.otrosCount} registro${rc.otrosCount!==1?'s':''})`,rc.totalOtrosIng]]:[]),
+    ['TOTAL DINERO RECIBIDO (efectivo + QR)',rc.totalRecibido],
+    ['   → En efectivo',rc.efectivo],
+    ['   → Por QR',rc.digital],
+    [],
+    ['Total egresos',rc.totalEgr],
+    ['Efectivo neto (efectivo − egresos)',rc.efectivo-rc.totalEgr],
+    ['Deudas pendientes generadas en el período',rc.dPend],
+    [],
+    [' DEUDAS'],
+    ['Nombre','Código','Productos','Total','Saldo','Estado'],
+    ..._repDeudas.map(d=>{const items=d.items||(d.prodId?[{prodId:d.prodId}]:[]);return[d.nombre,d.codigo,items.map(i=>{const p=getProd(i.prodId);return p?p.nombre:'—';}).join(', '),d.total,d.saldo,d.estado];})
+  ];
   const ws2=XLSX.utils.aoa_to_sheet(sumRows);XLSX.utils.book_append_sheet(wb,ws2,'Resumen');
   XLSX.writeFile(wb,`NutriWave-${_repDesde}-${_repHasta}.xlsx`);toast('📊 Excel exportado');
 }
 
 function exportTXT(){
   if(!_repMovs.length){toast('⚠️ Generá un reporte primero');return;}
-  const ventasTxt=_repMovs.filter(m=>m.tipo==='venta'||m.tipo==='apartado');
+  const rcT=_repCalc||{efectivo:0,digital:0,totalV:0,cobD:0,totalOtrosIng:0,totalEgr:0,totalRecibido:0,otrosCount:0};
   let txt=`REPORTE NUTRIWAVE — ${_repDesde} al ${_repHasta}\n${'═'.repeat(50)}\n\n`;
-  txt+=`Ingresos totales: Bs. ${ventasTxt.reduce((s,m)=>s+m.total,0).toFixed(2)}\n\n`;
+  txt+=`Ingresos por ventas y apartados: Bs. ${rcT.totalV.toFixed(2)}\n`;
+  txt+=`Cobros de deudas:                Bs. ${rcT.cobD.toFixed(2)}\n`;
+  if(rcT.otrosCount)txt+=`Otros ingresos:                  Bs. ${rcT.totalOtrosIng.toFixed(2)}\n`;
+  txt+=`TOTAL DINERO RECIBIDO:           Bs. ${rcT.totalRecibido.toFixed(2)}  (Efectivo: Bs. ${rcT.efectivo.toFixed(2)} + QR: Bs. ${rcT.digital.toFixed(2)})\n`;
+  txt+=`Egresos:                         Bs. ${rcT.totalEgr.toFixed(2)}\n`;
+  txt+=`Efectivo neto:                   Bs. ${(rcT.efectivo-rcT.totalEgr).toFixed(2)}\n\n`;
   _repMovs.forEach(m=>{const items=m.items||(m.prodId?[{prodId:m.prodId,cant:m.cant}]:[]);const prodStr=m.tipo==='egreso'?m.descripcion||m.nota||'Egreso':m.tipo==='otro-ingreso'?'OTRO INGRESO: '+(m.descripcion||m.nota||''):items.map(i=>{const p=getProd(i.prodId);return p?p.nombre+' x'+i.cant:'—';}).join(', ');txt+=`${m.fecha} ${m.hora||''} | ${m.nombre||''} (${m.codigo||''}) | ${m.tipo==='otro-ingreso'?'Otros Ingresos':m.tipo} | ${prodStr} | Bs. ${(m.total||0).toFixed(2)} | ${m.metodo||''}\n`;});
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));a.download=`nutriwave-${_repDesde}-${_repHasta}.txt`;a.click();
+}
+
+// ── Exportación Excel del día (desde dashboard) ──────────────────────────────
+function _fBo(fecha){ // YYYY-MM-DD → DD/MM/YYYY
+  if(!fecha||fecha.length<10)return fecha||'';
+  return fecha.slice(8,10)+'/'+fecha.slice(5,7)+'/'+fecha.slice(0,4);
+}
+
+// Estilos xlsx-js-style — colores de marca: púrpura 7B2D8B, verde menta 3DBFA0
+const _XB={top:{style:'thin',color:{rgb:'CBD5E1'}},bottom:{style:'thin',color:{rgb:'CBD5E1'}},left:{style:'thin',color:{rgb:'CBD5E1'}},right:{style:'thin',color:{rgb:'CBD5E1'}}};
+const _XS={
+  titulo:{font:{sz:16,bold:true,color:{rgb:'7B2D8B'}}},
+  meta:{font:{sz:10,color:{rgb:'64748B'}}},
+  metaVal:{font:{sz:10,bold:true,color:{rgb:'334155'}}},
+  seccionP:{fill:{fgColor:{rgb:'7B2D8B'}},font:{bold:true,sz:11,color:{rgb:'FFFFFF'}},border:_XB},
+  seccionT:{fill:{fgColor:{rgb:'3DBFA0'}},font:{bold:true,sz:11,color:{rgb:'FFFFFF'}},border:_XB},
+  th:{fill:{fgColor:{rgb:'7B2D8B'}},font:{bold:true,sz:10,color:{rgb:'FFFFFF'}},border:_XB,alignment:{horizontal:'center',vertical:'center',wrapText:true}},
+  celda:{border:_XB,font:{sz:10},alignment:{horizontal:'left',vertical:'center'}},
+  celdaAlt:{border:_XB,font:{sz:10},alignment:{horizontal:'left',vertical:'center'},fill:{fgColor:{rgb:'F4F4F6'}}},
+  monto:{border:_XB,font:{sz:10,bold:true},alignment:{horizontal:'right',vertical:'center'},numFmt:'"Bs. "#,##0.00'},
+  montoAlt:{border:_XB,font:{sz:10,bold:true},alignment:{horizontal:'right',vertical:'center'},numFmt:'"Bs. "#,##0.00',fill:{fgColor:{rgb:'F4F4F6'}}},
+  numero:{border:_XB,font:{sz:10,bold:true},alignment:{horizontal:'right',vertical:'center'}},
+  numeroAlt:{border:_XB,font:{sz:10,bold:true},alignment:{horizontal:'right',vertical:'center'},fill:{fgColor:{rgb:'F4F4F6'}}},
+  totalRow:{fill:{fgColor:{rgb:'E8F7F4'}},font:{bold:true,sz:10,color:{rgb:'2A9A82'}},border:_XB,alignment:{horizontal:'right',vertical:'center'}},
+  totalRowMonto:{fill:{fgColor:{rgb:'E8F7F4'}},font:{bold:true,sz:10,color:{rgb:'2A9A82'}},border:_XB,alignment:{horizontal:'right',vertical:'center'},numFmt:'"Bs. "#,##0.00'},
+  vacio:{font:{sz:10,italic:true,color:{rgb:'94A3B8'}}},
+};
+
+function _xset(ws,r,c,style){
+  const ref=XLSX.utils.encode_cell({r,c});
+  if(!ws[ref])ws[ref]={t:'s',v:''};
+  ws[ref].s=style;
+}
+function _xrow(ws,r,c1,c2,style){for(let c=c1;c<=c2;c++)_xset(ws,r,c,style);}
+
+function exportarDiaExcel(fecha){
+  if(!canEdit()){toast('❌ Sin permisos para exportar');return;}
+  if(typeof XLSX==='undefined'){toast('❌ La librería de Excel no cargó. Revisá la conexión.');return;}
+  toast('⏳ Generando reporte Excel...');
+  _buildReporteDia(fecha).then(wb=>{
+    XLSX.writeFile(wb,`NutriWave_Reporte_${fecha}.xlsx`);
+    toast(`📗 Reporte del ${_fBo(fecha)} descargado`);
+  }).catch(err=>{console.error('Error exportando Excel:',err);toast('❌ Error al generar el Excel');});
+}
+
+function _buildReporteDia(fecha){
+  return Promise.all([
+    db.ref('movimientos').once('value'),
+    db.ref('stock').once('value'),
+    db.ref('entradas').once('value'),
+    db.ref('apartados').once('value'),
+    db.ref('deudas').once('value'),
+  ]).then(([movSnap,stockSnap,entSnap,apSnap,deuSnap])=>{
+    const allMovs=[];movSnap.forEach(s=>{const v=s.val();if(v)allMovs.push({...v,_key:s.key});});
+    const movs=allMovs.filter(m=>m.fecha===fecha);
+    movs.sort((a,b)=>(a.hora||'').localeCompare(b.hora||''));
+    const stock=stockSnap.val()||{};
+    const allEntradas=[];entSnap.forEach(s=>{const v=s.val();if(v)allEntradas.push(v);});
+    const entradasDia=allEntradas.filter(e=>e.fecha===fecha);
+    const allApartados=[];apSnap.forEach(s=>{const v=s.val();if(v)allApartados.push({...v,movId:v.movId});});
+    const deudasByMov={},apartByMov={};
+    deuSnap.forEach(s=>{const v=s.val();if(v&&v.movId)deudasByMov[v.movId]=v;});
+    allApartados.forEach(a=>{if(a.movId)apartByMov[a.movId]=a;});
+
+    // ── KPIs (misma lógica que el dashboard) ──
+    const ventas=movs.filter(m=>m.tipo==='venta');
+    const apartadosDia=movs.filter(m=>m.tipo==='apartado');
+    const regalias=movs.filter(m=>m.tipo==='regalía');
+    const egresos=movs.filter(m=>m.tipo==='egreso');
+    const pagosDeuda=movs.filter(m=>m.tipo==='pago-deuda');
+    const otros=movs.filter(m=>m.tipo==='otro-ingreso');
+    const deudasNuevas=movs.filter(m=>m.tipo==='deuda');
+    let efectivo=0,digital=0;
+    [...ventas,...apartadosDia,...pagosDeuda,...otros].forEach(m=>{
+      if(m.metodo==='Efectivo')efectivo+=m.total||0;
+      else if(m.metodo==='QR')digital+=m.total||0;
+      else if(m.metodo==='MixtoEfectivoQR'||m.metodo==='MixtoRegalia'){efectivo+=m.montoEfectivo||0;digital+=m.montoQR||0;}
+    });
+    const totalEgresos=egresos.reduce((s,m)=>s+(m.monto||m.total||0),0);
+    const efectivoCaja=efectivo-totalEgresos;
+    const ingresos=efectivo+digital;
+    const totalRegalias=regalias.reduce((s,m)=>s+(m.total||0),0);
+    const unidadesRegalias=regalias.reduce((s,m)=>s+(m.items||[]).reduce((a,i)=>a+(i.cant||0),0),0);
+    const totalOtros=otros.reduce((s,m)=>s+(m.total||0),0);
+    const totalDeudasNuevas=deudasNuevas.reduce((s,m)=>s+(m.total||0),0);
+    const totalCobradoDeudas=pagosDeuda.reduce((s,m)=>s+(m.total||0),0);
+    const apartPend=allApartados.filter(a=>a.estado==='pendiente').length;
+    const sinDatos=movs.length===0;
+    const wb=XLSX.utils.book_new();
+    const now=new Date();
+
+    // ══ HOJA 1: Resumen del día ══
+    const r1=[];
+    r1.push(['NutriWave — Reporte Diario']);                                  // 0
+    r1.push(['Fecha del reporte:',_fBo(fecha)]);                              // 1
+    r1.push(['Generado el:',now.toLocaleDateString('es-BO')+' '+now.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'})]); // 2
+    r1.push(['Generado por:',rolLabel()]);                                    // 3
+    r1.push([]);                                                              // 4
+    r1.push(['INDICADORES DEL DÍA','']);                                      // 5
+    r1.push(['Concepto','Monto']);                                            // 6
+    const indicadores=[
+      ['Ingresos totales del día',ingresos,'m'],
+      ['Efectivo cobrado (bruto)',efectivo,'m'],
+      ['Efectivo en caja (neto tras egresos)',efectivoCaja,'m'],
+      ['Cobrado por QR',digital,'m'],
+      ['Egresos del día',totalEgresos,'m'],
+      ...(otros.length?[['Otros ingresos ('+otros.length+' registro'+(otros.length!==1?'s':'')+')',totalOtros,'m']]:[]),
+      ['Regalías entregadas (unidades)',unidadesRegalias,'n'],
+      ['Valor total de regalías entregadas',totalRegalias,'m'],
+      ['Deudas nuevas registradas ('+deudasNuevas.length+')',totalDeudasNuevas,'m'],
+      ['Deudas cobradas hoy ('+pagosDeuda.length+' pago'+(pagosDeuda.length!==1?'s':'')+')',totalCobradoDeudas,'m'],
+      ['Cantidad de ventas realizadas',ventas.length,'n'],
+      ['Apartados pendientes de entrega (total sistema)',apartPend,'n'],
+    ];
+    indicadores.forEach(i=>r1.push([i[0],i[1]]));
+    r1.push([]);
+    const rCuadre=r1.length;
+    r1.push(['CUADRE DE CAJA','']);
+    r1.push(['Concepto','Monto']);
+    const cuadre=[
+      ['Efectivo esperado en caja',efectivoCaja],
+      ['Total cobrado por QR',digital],
+      ['Total de egresos',totalEgresos],
+      ['Neto del día',ingresos-totalEgresos],
+    ];
+    cuadre.forEach(c=>r1.push(c));
+    if(sinDatos){r1.push([]);r1.push(['⚠ Sin movimientos registrados en esta fecha']);}
+    const ws1=XLSX.utils.aoa_to_sheet(r1);
+    ws1['!cols']=[{wch:44},{wch:18}];
+    ws1['!merges']=[{s:{r:0,c:0},e:{r:0,c:1}},{s:{r:5,c:0},e:{r:5,c:1}},{s:{r:rCuadre,c:0},e:{r:rCuadre,c:1}}];
+    _xset(ws1,0,0,_XS.titulo);
+    [1,2,3].forEach(r=>{_xset(ws1,r,0,_XS.meta);_xset(ws1,r,1,_XS.metaVal);});
+    _xrow(ws1,5,0,1,_XS.seccionP);
+    _xrow(ws1,6,0,1,_XS.th);
+    indicadores.forEach((ind,i)=>{
+      const r=7+i,alt=i%2===1;
+      _xset(ws1,r,0,alt?_XS.celdaAlt:_XS.celda);
+      _xset(ws1,r,1,ind[2]==='m'?(alt?_XS.montoAlt:_XS.monto):(alt?_XS.numeroAlt:_XS.numero));
+    });
+    _xrow(ws1,rCuadre,0,1,_XS.seccionT);
+    _xrow(ws1,rCuadre+1,0,1,_XS.th);
+    cuadre.forEach((c,i)=>{
+      const r=rCuadre+2+i,alt=i%2===1;
+      _xset(ws1,r,0,alt?_XS.celdaAlt:_XS.celda);
+      _xset(ws1,r,1,alt?_XS.montoAlt:_XS.monto);
+    });
+    if(sinDatos)_xset(ws1,r1.length-1,0,_XS.vacio);
+    XLSX.utils.book_append_sheet(wb,ws1,'Resumen del día');
+
+    // ══ HOJA 2: Detalle de movimientos ══
+    const TIPO_LBL={venta:'Venta','regalía':'Regalía','degustación':'Degustación',deuda:'Deuda','pago-deuda':'Pago Deuda',egreso:'Egreso',apartado:'Apartado','otro-ingreso':'Otros Ingresos','cambio-producto':'Cambio de producto','devolucion-deuda':'Devolución'};
+    const ROL_LBL={admin:'Administrador',contador:'Lic. Marcos',vista:'Vista'};
+    const cap=s=>s?s.charAt(0).toUpperCase()+s.slice(1):s;
+    const estadoDe=m=>{
+      if(m.tipo==='venta')return m.modificadoPorCambio?'Pagada (modificada)':'Pagada';
+      if(m.tipo==='deuda')return cap((deudasByMov[m._key]||{}).estado||'pendiente');
+      if(m.tipo==='apartado'){const a=apartByMov[m._key];return a?(a.estado==='pendiente'?'Pendiente de entrega':'Entregado'):'—';}
+      if(m.tipo==='pago-deuda'||m.tipo==='otro-ingreso')return'Cobrado';
+      if(m.tipo==='egreso')return'Pagado';
+      if(m.tipo==='devolucion-deuda')return'Devuelta';
+      return'—';
+    };
+    const h2=['N°','Hora','Tipo','Socio/Cliente','Código','Productos','Método de pago','Efectivo (Bs)','QR (Bs)','Regalía (Bs)','Total (Bs)','Estado','Nota/Descripción','Registrado por'];
+    const r2=[[`Detalle de movimientos — ${_fBo(fecha)}`],[],h2];
+    let sumEf=0,sumQr=0,sumReg=0;
+    movs.forEach((m,i)=>{
+      let ef=0,qr=0,reg=0;
+      if(['venta','apartado','pago-deuda','otro-ingreso'].includes(m.tipo)){
+        if(m.metodo==='Efectivo')ef=m.total||0;
+        else if(m.metodo==='QR')qr=m.total||0;
+        else{ef=m.montoEfectivo||0;qr=m.montoQR||0;reg=m.montoRegalia||0;}
+      }else if(m.tipo==='egreso'){ef=-(m.monto||m.total||0);}
+      sumEf+=ef;sumQr+=qr;sumReg+=reg;
+      const items=m.items||(m.prodId?[{prodId:m.prodId,cant:m.cant}]:[]);
+      const prods=m.tipo==='egreso'||m.tipo==='otro-ingreso'?(m.descripcion||m.nota||'—'):items.map(it=>{const p=getProd(it.prodId);return(p?p.nombre:it.prodId)+' x'+(it.cant||0);}).join(', ')||'—';
+      const totalMov=m.tipo==='egreso'?-(m.monto||m.total||0):(m.total||0);
+      r2.push([i+1,m.hora||'',TIPO_LBL[m.tipo]||m.tipo,m.nombre||'—',m.codigo||'',prods,m.metodo||'—',ef,qr,reg,totalMov,estadoDe(m),m.nota||'',ROL_LBL[m.registradoPor]||m.registradoPor||'—']);
+    });
+    if(sinDatos)r2.push(['','','Sin movimientos registrados en esta fecha']);
+    else r2.push(['','','','','','','TOTALES / Neto del día:',sumEf,sumQr,sumReg,ingresos-totalEgresos,'','','']);
+    const ws2=XLSX.utils.aoa_to_sheet(r2);
+    ws2['!cols']=[{wch:4},{wch:11},{wch:14},{wch:22},{wch:8},{wch:38},{wch:15},{wch:13},{wch:13},{wch:13},{wch:13},{wch:18},{wch:32},{wch:14}];
+    ws2['!merges']=[{s:{r:0,c:0},e:{r:0,c:13}}];
+    _xset(ws2,0,0,_XS.titulo);
+    _xrow(ws2,2,0,13,_XS.th);
+    movs.forEach((m,i)=>{
+      const r=3+i,alt=i%2===1;
+      for(let c=0;c<=13;c++){
+        if(c>=7&&c<=10)_xset(ws2,r,c,alt?_XS.montoAlt:_XS.monto);
+        else _xset(ws2,r,c,alt?_XS.celdaAlt:_XS.celda);
+      }
+    });
+    const rTot2=3+movs.length;
+    if(sinDatos)_xset(ws2,rTot2,2,_XS.vacio);
+    else for(let c=0;c<=13;c++)_xset(ws2,rTot2,c,(c>=7&&c<=10)?_XS.totalRowMonto:_XS.totalRow);
+    XLSX.utils.book_append_sheet(wb,ws2,'Detalle de movimientos');
+
+    // ══ HOJA 3: Stock e Inventario ══
+    // Stock al cierre de la fecha seleccionada (reconstrucción igual al dashboard)
+    const stockCierre={...stock};
+    if(fecha!==todayStr()){
+      allMovs.forEach(m=>{if(m.fecha>fecha&&['venta','regalía','degustación','deuda','apartado'].includes(m.tipo)){(m.items||[]).forEach(i=>{if(i.prodId)stockCierre[i.prodId]=(stockCierre[i.prodId]||0)+(i.cant||0);});}});
+      allEntradas.forEach(e=>{if(e.fecha>fecha&&e.prodId)stockCierre[e.prodId]=Math.max(0,(stockCierre[e.prodId]||0)-(e.cant||0));});
+    }
+    const unitsBy=tipos=>{const map={};movs.filter(m=>tipos.includes(m.tipo)).forEach(m=>{(m.items||[]).forEach(i=>{if(i.prodId)map[i.prodId]=(map[i.prodId]||0)+(i.cant||0);});});return map;};
+    const uVend=unitsBy(['venta','apartado']);
+    const uRegal=unitsBy(['regalía']);
+    const uDegu=unitsBy(['degustación']);
+    const uDeuda=unitsBy(['deuda']);
+    const uEntr={};entradasDia.forEach(e=>{if(e.prodId)uEntr[e.prodId]=(uEntr[e.prodId]||0)+(e.cant||0);});
+    const h3=['Producto','Stock inicial del día','Vendidas hoy','Regaladas hoy','Degustación hoy','Entradas hoy','Stock actual','Valor en stock (Bs)'];
+    const r3=[[`Stock e Inventario — al cierre del ${_fBo(fecha)}`],[],h3];
+    let totVend=0,totRegal=0,totValor=0;
+    PRODUCTOS.forEach(p=>{
+      const cierre=stockCierre[p.id]||0;
+      const v=uVend[p.id]||0,rg=uRegal[p.id]||0,dg=uDegu[p.id]||0,dd=uDeuda[p.id]||0,en=uEntr[p.id]||0;
+      const inicial=cierre+v+rg+dg+dd-en;
+      const valor=cierre*p.precio;
+      totVend+=v;totRegal+=rg;totValor+=valor;
+      r3.push([p.emoji+' '+p.nombre,inicial,v,rg,dg,en,cierre,valor]);
+    });
+    r3.push(['TOTALES','',totVend,totRegal,'','','',totValor]);
+    r3.push([]);
+    r3.push(['Total unidades vendidas hoy',totVend]);
+    r3.push(['Total unidades regaladas hoy',totRegal]);
+    r3.push(['Valor total del inventario actual',totValor]);
+    if(sinDatos&&!entradasDia.length)r3.push([],['Sin movimientos registrados en esta fecha — el stock mostrado es el vigente al cierre.']);
+    const ws3=XLSX.utils.aoa_to_sheet(r3);
+    ws3['!cols']=[{wch:24},{wch:16},{wch:12},{wch:12},{wch:14},{wch:12},{wch:12},{wch:16}];
+    ws3['!merges']=[{s:{r:0,c:0},e:{r:0,c:7}}];
+    _xset(ws3,0,0,_XS.titulo);
+    _xrow(ws3,2,0,7,_XS.th);
+    PRODUCTOS.forEach((p,i)=>{
+      const r=3+i,alt=i%2===1;
+      _xset(ws3,r,0,alt?_XS.celdaAlt:_XS.celda);
+      for(let c=1;c<=6;c++)_xset(ws3,r,c,alt?_XS.numeroAlt:_XS.numero);
+      _xset(ws3,r,7,alt?_XS.montoAlt:_XS.monto);
+    });
+    const rTot3=3+PRODUCTOS.length;
+    for(let c=0;c<=7;c++)_xset(ws3,rTot3,c,c===7?_XS.totalRowMonto:_XS.totalRow);
+    [rTot3+2,rTot3+3,rTot3+4].forEach((r,i)=>{
+      _xset(ws3,r,0,_XS.celda);
+      _xset(ws3,r,1,i===2?_XS.monto:_XS.numero);
+    });
+    XLSX.utils.book_append_sheet(wb,ws3,'Stock e Inventario');
+    return wb;
+  });
 }
 
 // ── Buscador global ──────────────────────────────────────────────────────────
@@ -2247,7 +2517,11 @@ function initVentasChart(allMovs){
     const d=new Date();d.setDate(d.getDate()-i);
     const str=localDateStr(d);
     labels.push(d.toLocaleDateString('es-BO',{weekday:'short',day:'numeric'}));
-    data.push(allMovs.filter(m=>m.fecha===str&&(m.tipo==='venta'||m.tipo==='apartado'||m.tipo==='otro-ingreso')).reduce((s,m)=>s+(m.total||0),0));
+    // Mismos tipos que el KPI "Ingresos" del dashboard, para que la barra coincida con la tarjeta
+    data.push(allMovs.filter(m=>m.fecha===str&&['venta','apartado','otro-ingreso','pago-deuda'].includes(m.tipo)).reduce((s,m)=>{
+      if(m.metodo==='MixtoEfectivoQR'||m.metodo==='MixtoRegalia')return s+(m.montoEfectivo||0)+(m.montoQR||0);
+      return s+(m.total||0);
+    },0));
   }
   const isDark=document.documentElement.getAttribute('data-theme')==='dark';
   const gridColor=isDark?'#334155':'#e2e8f0';
