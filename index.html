@@ -136,6 +136,18 @@ tbody tr:hover td{background:var(--bg)}
 .mobile-nav-btn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 8px;border:none;background:transparent;color:#64748b;font-size:9px;font-weight:700;cursor:pointer;border-radius:8px;font-family:'Inter',sans-serif;min-width:48px}
 .mobile-nav-btn.active{color:var(--purple);background:var(--purple-light)}
 .mobile-nav-btn .mn-icon{font-size:20px}
+/* Mi Almacén (solo admin) */
+.alm-tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:14px;-webkit-overflow-scrolling:touch}
+.alm-tab{flex-shrink:0;border:1.5px solid var(--border);background:#fff;color:var(--muted);border-radius:20px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;transition:all .12s;white-space:nowrap}
+.alm-tab.active{background:var(--purple);border-color:var(--purple);color:#fff}
+.alm-big-btns{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.alm-big-btn{border:none;border-radius:14px;padding:20px 12px;font-size:17px;font-weight:800;cursor:pointer;font-family:'Inter',sans-serif;box-shadow:var(--shadow-md);transition:transform .1s}
+.alm-big-btn:active{transform:scale(.97)}
+.alm-inv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:12px}
+.alm-inv-card{background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:16px;box-shadow:var(--shadow)}
+.alm-form input,.alm-form select{min-height:46px}
+[data-theme="dark"] .alm-tab,[data-theme="dark"] .alm-inv-card{background:var(--surface);border-color:var(--border)}
+[data-theme="dark"] .alm-tab.active{background:var(--purple);border-color:var(--purple);color:#fff}
 /* Dark mode */
 [data-theme="dark"]{--bg:#0f172a;--surface:#1e293b;--card:#263148;--border:#334155;--text:#f1f5f9;--text2:#cbd5e1;--muted:#94a3b8;--faint:#64748b;--purple-light:#2d1b3d;--purple-mid:#7c3aed;--teal-light:#0f2d28;--red-light:#2d0f0f;--amber-light:#2d1f0f;--blue-light:#0f1f3d;}
 [data-theme="dark"] body{background:var(--bg);color:var(--text)}
@@ -172,7 +184,11 @@ tbody tr:hover td{background:var(--bg)}
   thead th,tbody td{padding:8px 6px!important}
   .panel{padding:14px!important}
   .products-grid{grid-template-columns:1fr 1fr!important}
-  #mobile-nav{display:flex!important;position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--border);z-index:200;padding:6px 4px;justify-content:space-around;box-shadow:0 -2px 10px rgba(0,0,0,.08)}
+  #mobile-nav{display:flex!important;position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--border);z-index:200;padding:6px 4px;justify-content:flex-start;box-shadow:0 -2px 10px rgba(0,0,0,.08);overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .mobile-nav-btn{flex-shrink:0}
+  .alm-inv-grid{grid-template-columns:1fr 1fr!important}
+  .alm-form input,.alm-form select{font-size:16px!important;min-height:50px}
+  .alm-big-btn{padding:22px 10px;font-size:18px}
 }
 </style>
 </head>
@@ -384,6 +400,44 @@ tbody tr:hover td{background:var(--bg)}
   </div>
 </div>
 
+<div class="overlay" id="almAjusteOverlay" onclick="closeModal('almAjusteOverlay',event)">
+  <div class="modal">
+    <div class="modal-title">⚖️ Ajuste de inventario — Mi Almacén</div>
+    <div id="alm-aj-info" style="background:var(--bg);border-radius:10px;padding:14px;margin-bottom:16px;font-size:13px;border:1px solid var(--border)"></div>
+    <div class="form-row alm-form">
+      <div class="field"><label>Conteo físico real (unidades)</label><input type="number" id="alm-aj-conteo" min="0" inputmode="numeric" placeholder="0" oninput="almCalcAjuste()"></div>
+      <div class="field"><label>Fecha del conteo</label><input type="date" id="alm-aj-fecha"></div>
+    </div>
+    <div class="field alm-form" style="margin-bottom:12px"><label>Motivo (obligatorio)</label><input type="text" id="alm-aj-motivo" placeholder="ej. merma por daño, diferencia detectada en conteo..."></div>
+    <div id="alm-aj-dif" style="display:none;margin-bottom:14px;font-size:13px;font-weight:700;padding:10px 14px;border-radius:10px"></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px">ℹ️ El ajuste queda registrado como un movimiento más del kardex. Nunca se sobreescriben datos.</div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="almGuardarAjuste()" style="flex:1;justify-content:center">✓ Registrar ajuste</button>
+      <button class="btn btn-ghost" onclick="closeModal('almAjusteOverlay')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="almExportOverlay" onclick="closeModal('almExportOverlay',event)">
+  <div class="modal">
+    <div class="modal-title">📗 Exportar Mi Almacén a Excel</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Elegí el rango del reporte. El archivo incluye 6 hojas: Resumen, Kardex detallado, Entradas, Salidas, Egresos y Cuadres diarios.</div>
+    <div class="btn-row" style="margin-bottom:14px">
+      <button class="btn btn-ghost btn-sm" onclick="almSetExportRango('dia')">Hoy</button>
+      <button class="btn btn-ghost btn-sm" onclick="almSetExportRango('semana')">Última semana</button>
+      <button class="btn btn-ghost btn-sm" onclick="almSetExportRango('mes')">Este mes</button>
+    </div>
+    <div class="form-row alm-form">
+      <div class="field"><label>Desde</label><input type="date" id="alm-exp-desde"></div>
+      <div class="field"><label>Hasta</label><input type="date" id="alm-exp-hasta"></div>
+    </div>
+    <div class="btn-row" style="margin-top:4px">
+      <button class="btn btn-teal" onclick="almExportExcel()" style="flex:1;justify-content:center">📗 Descargar Excel</button>
+      <button class="btn btn-ghost" onclick="closeModal('almExportOverlay')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast-wrap" id="toastWrap"></div>
 
 <div id="mobile-nav">
@@ -395,6 +449,7 @@ tbody tr:hover td{background:var(--bg)}
   <button class="mobile-nav-btn" id="mn-deudas" onclick="mobileGoTo('deudas')"><span class="mn-icon">💳</span>Deudas</button>
   <button class="mobile-nav-btn" id="mn-apartados" onclick="mobileGoTo('apartados')"><span class="mn-icon">📌</span>Apart.</button>
   <button class="mobile-nav-btn" id="mn-reportes" onclick="mobileGoTo('reportes')"><span class="mn-icon">📅</span>Reportes</button>
+  <button class="mobile-nav-btn" id="mn-mi-almacen" onclick="mobileGoTo('mi-almacen')"><span class="mn-icon">🗄️</span>Almacén</button>
   <button class="mobile-nav-btn" onclick="logout()" style="color:#fff;background:var(--red);border-radius:10px;padding:6px 10px;font-weight:800;min-width:52px"><span class="mn-icon">⏏</span>Salir</button>
 </div>
 
@@ -426,7 +481,7 @@ const PRODUCTOS=[
 
 const PINS={admin:'1234',contador:'5678'};
 const ROLES={
-  admin:{label:'🧑‍💼 Administrador',nav:['dashboard','nueva-salida','stock','entrada-stock','movimientos','deudas','apartados','reportes']},
+  admin:{label:'🧑‍💼 Administrador',nav:['dashboard','nueva-salida','stock','entrada-stock','movimientos','deudas','apartados','reportes','mi-almacen']},
   contador:{label:'🧾 Lic. Marcos',nav:['dashboard','nueva-salida','entrada-stock','movimientos','deudas','apartados','reportes']},
   vista:{label:'👩 Lic. Claudia Lucano',nav:['dashboard','stock','deudas']},
 };
@@ -489,8 +544,8 @@ function logout(){
   backToRoles();
 }
 
-const NAV_ITEMS={'dashboard':{icon:'📊',label:'Dashboard',section:'Principal'},'nueva-salida':{icon:'📤',label:'Nueva Salida',section:'Principal'},'stock':{icon:'📦',label:'Stock',section:'Inventario'},'entrada-stock':{icon:'📥',label:'Entrada Stock',section:'Inventario'},'movimientos':{icon:'📋',label:'Movimientos',section:'Registros'},'deudas':{icon:'💳',label:'Deudas',section:'Registros'},'apartados':{icon:'📌',label:'Apartados',section:'Registros'},'reportes':{icon:'📅',label:'Reportes',section:'Registros'}};
-const PAGE_TITLES={'dashboard':'Dashboard','nueva-salida':'Nueva Salida','stock':'Stock / Inventario','entrada-stock':'Entrada de Mercadería','movimientos':'Movimientos','deudas':'Deudas','apartados':'Productos Apartados','reportes':'Reportes'};
+const NAV_ITEMS={'dashboard':{icon:'📊',label:'Dashboard',section:'Principal'},'nueva-salida':{icon:'📤',label:'Nueva Salida',section:'Principal'},'stock':{icon:'📦',label:'Stock',section:'Inventario'},'entrada-stock':{icon:'📥',label:'Entrada Stock',section:'Inventario'},'movimientos':{icon:'📋',label:'Movimientos',section:'Registros'},'deudas':{icon:'💳',label:'Deudas',section:'Registros'},'apartados':{icon:'📌',label:'Apartados',section:'Registros'},'reportes':{icon:'📅',label:'Reportes',section:'Registros'},'mi-almacen':{icon:'🗄️',label:'Mi Almacén',section:'Privado'}};
+const PAGE_TITLES={'dashboard':'Dashboard','nueva-salida':'Nueva Salida','stock':'Stock / Inventario','entrada-stock':'Entrada de Mercadería','movimientos':'Movimientos','deudas':'Deudas','apartados':'Productos Apartados','reportes':'Reportes','mi-almacen':'Mi Almacén'};
 
 function buildNav(){
   const nav=document.getElementById('sidebarNav');
@@ -529,6 +584,21 @@ function borrarDia(fecha){
       renderDashboard();
     }).catch(()=>toast('❌ Error al borrar los datos'));
   });
+}
+
+// Revierte el efecto de un movimiento sobre el stock (para reconstruir stock de días pasados).
+// Cubre también cambios de producto y devoluciones de deuda, que antes se ignoraban.
+function _revertirMovEnStock(stockObj,m){
+  if(['venta','regalía','degustación','deuda','apartado'].includes(m.tipo)){
+    (m.items||[]).forEach(i=>{if(i.prodId)stockObj[i.prodId]=(stockObj[i.prodId]||0)+(i.cant||0);});
+  }else if(m.tipo==='cambio-producto'){
+    // El cambio sacó el producto nuevo del stock y devolvió el original: revertir ambos
+    (m.items||[]).forEach(i=>{if(i.prodId)stockObj[i.prodId]=(stockObj[i.prodId]||0)+(i.cant||0);});
+    if(m.itemDevuelto&&m.itemDevuelto.prodId)stockObj[m.itemDevuelto.prodId]=(stockObj[m.itemDevuelto.prodId]||0)-(m.itemDevuelto.cant||0);
+  }else if(m.tipo==='devolucion-deuda'){
+    // La devolución sumó productos al stock: revertir restándolos
+    (m.items||[]).forEach(i=>{if(i.prodId)stockObj[i.prodId]=(stockObj[i.prodId]||0)-(i.cant||0);});
+  }
 }
 
 // Fecha local en formato YYYY-MM-DD (toISOString usa UTC y se desfasa de noche en UTC-4)
@@ -609,6 +679,7 @@ function renderPage(page){
   if(page==='deudas')renderDeudas();
   if(page==='reportes')renderReportes();
   if(page==='apartados')renderApartados();
+  if(page==='mi-almacen')renderMiAlmacen();
 }
 
 function renderDashboard(fechaVer){
@@ -644,7 +715,7 @@ function renderDashboard(fechaVer){
     const apartadosPendientes=allApartados.filter(a=>a.estado==='pendiente').length;
     const stockDisplay={...stock};
     if(!esHoy){
-      allMovs.forEach(m=>{if(m.fecha>hoy&&['venta','regalía','degustación','deuda','apartado'].includes(m.tipo)){(m.items||[]).forEach(i=>{if(i.prodId)stockDisplay[i.prodId]=(stockDisplay[i.prodId]||0)+(i.cant||0);});}});
+      allMovs.forEach(m=>{if(m.fecha>hoy)_revertirMovEnStock(stockDisplay,m);});
       allEntradas.forEach(e=>{if(e.fecha>hoy&&e.prodId)stockDisplay[e.prodId]=Math.max(0,(stockDisplay[e.prodId]||0)-(e.cant||0));});
     }
     const ventas=movs.filter(m=>m.tipo==='venta');
@@ -2197,7 +2268,7 @@ function _buildReporteDia(fecha){
     // Stock al cierre de la fecha seleccionada (reconstrucción igual al dashboard)
     const stockCierre={...stock};
     if(fecha!==todayStr()){
-      allMovs.forEach(m=>{if(m.fecha>fecha&&['venta','regalía','degustación','deuda','apartado'].includes(m.tipo)){(m.items||[]).forEach(i=>{if(i.prodId)stockCierre[i.prodId]=(stockCierre[i.prodId]||0)+(i.cant||0);});}});
+      allMovs.forEach(m=>{if(m.fecha>fecha)_revertirMovEnStock(stockCierre,m);});
       allEntradas.forEach(e=>{if(e.fecha>fecha&&e.prodId)stockCierre[e.prodId]=Math.max(0,(stockCierre[e.prodId]||0)-(e.cant||0));});
     }
     const unitsBy=tipos=>{const map={};movs.filter(m=>tipos.includes(m.tipo)).forEach(m=>{(m.items||[]).forEach(i=>{if(i.prodId)map[i.prodId]=(map[i.prodId]||0)+(i.cant||0);});});return map;};
@@ -2243,6 +2314,852 @@ function _buildReporteDia(fecha){
     XLSX.utils.book_append_sheet(wb,ws3,'Stock e Inventario');
     return wb;
   });
+}
+
+// ══════════════════════ MI ALMACÉN — solo Administrador ══════════════════════
+// Registro paralelo de control interno con estándar de kardex contable.
+// Nodo Firebase propio: miAlmacen. NUNCA lee ni escribe stock/, movimientos/,
+// entradas/ ni ningún otro nodo del inventario operativo del sistema.
+const ALM_TIPO_LBL={inicial:'Inventario inicial',entrada:'Entrada',venta:'Venta',regalia:'Regalía',degustacion:'Degustación',merma:'Merma',otro:'Otro',ajuste:'Ajuste'};
+const ALM_TIPOS_SALIDA=[['venta','💰 Venta'],['regalia','🎁 Regalía'],['degustacion','🍃 Degustación'],['merma','🗑 Merma'],['otro','📦 Otro']];
+const ALM_SALIDA_SET=['venta','regalia','degustacion','merma','otro'];
+let _almTab='inventario',_almMovs=[],_almEgresos=[],_almCuadres=[],_almSaldos={},_almAjusteProd=null,_almEsperadoActual=0,_almKdx={prod:'',tipo:'',desde:'',hasta:''};
+
+function _almGuard(){if(!isAdmin()){toast('❌ Módulo exclusivo del Administrador');return false;}return true;}
+
+function _almPill(tipo){
+  const cls={inicial:'pill-blue',entrada:'pill-green',venta:'pill-purple',regalia:'pill-amber',degustacion:'pill-amber',merma:'pill-red',otro:'pill-gray',ajuste:'pill-blue'};
+  const emo={inicial:'🏁',entrada:'📥',venta:'💰',regalia:'🎁',degustacion:'🍃',merma:'🗑',otro:'📦',ajuste:'⚖️'};
+  return `<span class="pill ${cls[tipo]||'pill-gray'}">${emo[tipo]||''} ${ALM_TIPO_LBL[tipo]||tipo}</span>`;
+}
+
+function _almFetch(){
+  return Promise.all([
+    db.ref('miAlmacen/movimientos').once('value'),
+    db.ref('miAlmacen/egresos').once('value'),
+    db.ref('miAlmacen/cuadres').once('value'),
+  ]).then(([mSnap,eSnap,cSnap])=>{
+    _almMovs=[];mSnap.forEach(s=>{const v=s.val();if(v)_almMovs.push({...v,_key:s.key});});
+    _almEgresos=[];eSnap.forEach(s=>{const v=s.val();if(v)_almEgresos.push({...v,_key:s.key});});
+    _almCuadres=[];cSnap.forEach(s=>{const v=s.val();if(v)_almCuadres.push({...v,_key:s.key});});
+    // Orden cronológico estricto: fecha, luego hora, luego timestamp de registro
+    _almMovs.sort((a,b)=>((a.fecha||'')+' '+(a.hora||'')).localeCompare((b.fecha||'')+' '+(b.hora||''))||(a.ts||0)-(b.ts||0));
+    // Saldo corrido por producto, movimiento a movimiento (kardex contable)
+    const saldos={};
+    _almMovs.forEach(m=>{saldos[m.prodId]=(saldos[m.prodId]||0)+(m.cantEntrada||0)-(m.cantSalida||0);m._saldo=saldos[m.prodId];});
+    _almSaldos=saldos;
+    return saldos;
+  });
+}
+
+function renderMiAlmacen(tab){
+  if(!_almGuard()){goTo('dashboard');return;}
+  if(tab)_almTab=tab;
+  const c=document.getElementById('appContent');
+  const tabs=[['inventario','📦 Inventario'],['entradas','📥 Entradas'],['salidas','📤 Salidas'],['egresos','💸 Egresos'],['resumen','📅 Resumen del Día'],['kardex','📒 Kardex']];
+  c.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+      <div style="font-size:12px;color:var(--muted);font-weight:600">🗄️ Registro interno de almacén — independiente del inventario del sistema (no afecta el stock operativo)</div>
+      <button class="btn btn-teal btn-sm" onclick="almAbrirExport()">📗 Exportar</button>
+    </div>
+    <div class="alm-tabs">${tabs.map(([id,lbl])=>`<button class="alm-tab ${_almTab===id?'active':''}" onclick="renderMiAlmacen('${id}')">${lbl}</button>`).join('')}</div>
+    <div id="alm-body"><div class="loading">⏳ Cargando...</div></div>`;
+  _almFetch().then(()=>{
+    if(currentPage!=='mi-almacen')return;
+    const el=document.getElementById('alm-body');if(!el)return;
+    if(_almTab==='inventario')_almViewInventario(el);
+    else if(_almTab==='entradas')_almViewEntradas(el);
+    else if(_almTab==='salidas')_almViewSalidas(el);
+    else if(_almTab==='egresos')_almViewEgresos(el);
+    else if(_almTab==='resumen')_almViewResumen(el);
+    else if(_almTab==='kardex')_almViewKardex(el);
+  }).catch(err=>{
+    console.error('Error cargando Mi Almacén:',err);
+    const el=document.getElementById('alm-body');
+    if(el)el.innerHTML='<div class="empty"><span class="empty-icon">⚠️</span><p>Error al cargar Mi Almacén. Revisá la conexión.</p></div>';
+  });
+}
+
+// ── Inventario actual ─────────────────────────────────────────────────────────
+function _almInicialFormHtml(prods){
+  return `<div class="alm-form">
+    <div class="form-row" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
+      ${prods.map(p=>`<div class="field"><label>${p.emoji} ${p.nombre}</label><input type="number" id="alm-ini-${p.id}" min="0" inputmode="numeric" placeholder="unidades"></div>`).join('')}
+    </div>
+    <button class="btn btn-teal" style="width:100%;justify-content:center;padding:14px;font-size:15px" onclick="almGuardarInicial()">🏁 Guardar inventario inicial</button>
+  </div>`;
+}
+
+function _almViewInventario(el){
+  const sinMovs=_almMovs.length===0;
+  const valorTotal=PRODUCTOS.reduce((s,p)=>s+(_almSaldos[p.id]||0)*p.precio,0);
+  const totalUnidades=PRODUCTOS.reduce((s,p)=>s+(_almSaldos[p.id]||0),0);
+  const prodsSinMov=PRODUCTOS.filter(p=>!_almMovs.some(m=>m.prodId===p.id));
+  el.innerHTML=`
+    <div class="alm-big-btns">
+      <button class="alm-big-btn" style="background:var(--teal);color:#fff" onclick="renderMiAlmacen('entradas')">＋ Entrada</button>
+      <button class="alm-big-btn" style="background:var(--purple);color:#fff" onclick="renderMiAlmacen('salidas')">－ Salida</button>
+    </div>
+    ${sinMovs?`<div class="panel" style="border-left:4px solid var(--teal)">
+      <div class="panel-header"><span class="panel-title">🏁 Inventario inicial — primera vez</span></div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Cargá el conteo físico actual de cada producto. Es la línea base desde donde arranca el kardex y queda registrada con fecha y hora.</div>
+      ${_almInicialFormHtml(PRODUCTOS)}
+    </div>`:''}
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">📦 Inventario actual — según Mi Almacén</span>
+        ${!sinMovs&&prodsSinMov.length?`<button class="btn btn-ghost btn-sm" onclick="almToggleInicial()">🏁 Inventario inicial (${prodsSinMov.length} pendiente${prodsSinMov.length!==1?'s':''})</button>`:''}
+      </div>
+      ${!sinMovs&&prodsSinMov.length?`<div id="alm-ini-extra" style="display:none;margin-bottom:14px">${_almInicialFormHtml(prodsSinMov)}</div>`:''}
+      ${sinMovs?'<div class="empty"><span class="empty-icon">🗄️</span><p>Aún no hay movimientos. Cargá el inventario inicial para empezar.</p></div>':`
+      <div class="alm-inv-grid">${PRODUCTOS.map(p=>{
+        const s=_almSaldos[p.id]||0;
+        const color=s<0?'var(--red)':s<=5?'var(--amber)':'var(--teal-dark)';
+        return `<div class="alm-inv-card">
+          <div style="font-size:26px;margin-bottom:6px">${p.emoji}</div>
+          <div style="font-weight:700;font-size:13px;margin-bottom:8px">${p.nombre}</div>
+          <div><span style="font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:800;color:${color}">${s}</span> <span style="font-size:12px;color:var(--muted);font-weight:600">uds.</span></div>
+          <div style="font-size:12px;color:var(--purple);font-family:'JetBrains Mono',monospace;font-weight:600;margin-top:4px">${fmt(s*p.precio)}</div>
+          <button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="almAbrirAjuste('${p.id}')">⚖️ Ajustar</button>
+        </div>`;
+      }).join('')}</div>
+      <div class="total-box" style="margin-top:16px;margin-bottom:0">
+        <div><div style="font-size:11px;font-weight:700;color:var(--purple);text-transform:uppercase">Valor total estimado</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${totalUnidades} unidades en almacén</div></div>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:800;color:var(--purple)">${fmt(valorTotal)}</span>
+      </div>`}
+    </div>`;
+}
+
+function almToggleInicial(){
+  const el=document.getElementById('alm-ini-extra');
+  if(el)el.style.display=el.style.display==='none'?'block':'none';
+}
+
+function almGuardarInicial(){
+  if(!_almGuard())return;
+  const now=new Date();
+  const hora=now.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
+  const updates={};let n=0;
+  PRODUCTOS.forEach(p=>{
+    const inp=document.getElementById('alm-ini-'+p.id);
+    if(!inp||inp.value==='')return;
+    const cant=parseInt(inp.value,10);
+    if(!Number.isInteger(cant)||cant<0)return;
+    if(_almMovs.some(m=>m.prodId===p.id))return; // ya tiene movimientos: la línea base no se duplica
+    updates['miAlmacen/movimientos/'+db.ref('miAlmacen/movimientos').push().key]={fecha:todayStr(),hora,ts:Date.now()+n,prodId:p.id,tipo:'inicial',cantEntrada:cant,cantSalida:0,efectivo:0,qr:0,detalle:'Inventario inicial (conteo físico)',nota:'',registradoPor:'Administrador'};
+    n++;
+  });
+  if(!n){toast('⚠️ Ingresá al menos un conteo válido');return;}
+  db.ref().update(updates).then(()=>{
+    toast(`🏁 Inventario inicial registrado (${n} producto${n!==1?'s':''})`);
+    renderMiAlmacen('inventario');
+  }).catch(()=>toast('❌ Error al guardar el inventario inicial'));
+}
+
+// ── Ajuste de inventario (queda como movimiento del kardex, nunca sobreescribe) ──
+function almAbrirAjuste(prodId){
+  if(!_almGuard())return;
+  const p=getProd(prodId);if(!p)return;
+  _almAjusteProd=prodId;
+  const saldo=_almSaldos[prodId]||0;
+  document.getElementById('alm-aj-info').innerHTML=`<div style="font-weight:700;font-size:14px">${p.emoji} ${p.nombre}</div><div style="font-size:12px;color:var(--muted);margin-top:4px">Saldo actual según Mi Almacén: <strong style="font-family:'JetBrains Mono',monospace">${saldo} unidades</strong></div>`;
+  document.getElementById('alm-aj-conteo').value='';
+  document.getElementById('alm-aj-fecha').value=todayStr();
+  document.getElementById('alm-aj-motivo').value='';
+  document.getElementById('alm-aj-dif').style.display='none';
+  document.getElementById('almAjusteOverlay').classList.add('open');
+}
+
+function almCalcAjuste(){
+  const difEl=document.getElementById('alm-aj-dif');
+  const v=document.getElementById('alm-aj-conteo').value;
+  if(v===''||!_almAjusteProd){difEl.style.display='none';return;}
+  const conteo=parseInt(v,10);
+  if(!Number.isInteger(conteo)||conteo<0){difEl.style.display='none';return;}
+  const dif=conteo-(_almSaldos[_almAjusteProd]||0);
+  difEl.style.display='block';
+  if(dif===0){difEl.style.background='var(--teal-light)';difEl.style.color='var(--teal-dark)';difEl.textContent='✅ Sin diferencia — el conteo coincide con el saldo registrado';}
+  else if(dif>0){difEl.style.background='var(--blue-light)';difEl.style.color='var(--blue)';difEl.textContent=`⚖️ Sobran ${dif} unidades — se registrará una ENTRADA por ajuste de +${dif}`;}
+  else{difEl.style.background='var(--red-light)';difEl.style.color='var(--red)';difEl.textContent=`⚖️ Faltan ${-dif} unidades — se registrará una SALIDA por ajuste de ${dif}`;}
+}
+
+function almGuardarAjuste(){
+  if(!_almGuard())return;
+  const p=getProd(_almAjusteProd);
+  if(!p){toast('❌ Producto inválido');return;}
+  const v=document.getElementById('alm-aj-conteo').value;
+  const conteo=parseInt(v,10);
+  const fecha=document.getElementById('alm-aj-fecha').value||todayStr();
+  const motivo=document.getElementById('alm-aj-motivo').value.trim();
+  if(v===''||!Number.isInteger(conteo)||conteo<0){toast('⚠️ Ingresá el conteo físico real');return;}
+  if(!motivo){toast('⚠️ El motivo del ajuste es obligatorio');return;}
+  const dif=conteo-(_almSaldos[_almAjusteProd]||0);
+  if(dif===0){toast('✅ Sin diferencia — no hace falta ajuste');closeModal('almAjusteOverlay');return;}
+  const now=new Date();
+  const mov={fecha,hora:now.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'}),ts:Date.now(),prodId:_almAjusteProd,tipo:'ajuste',cantEntrada:dif>0?dif:0,cantSalida:dif<0?-dif:0,efectivo:0,qr:0,motivo,nota:motivo,detalle:`Ajuste por conteo físico (${dif>0?'+':''}${dif}) — ${motivo}`,registradoPor:'Administrador'};
+  db.ref('miAlmacen/movimientos').push(mov).then(()=>{
+    closeModal('almAjusteOverlay');
+    toast(`⚖️ Ajuste registrado: ${dif>0?'+':''}${dif} ${p.nombre}`);
+    renderMiAlmacen();
+  }).catch(()=>toast('❌ Error al guardar el ajuste'));
+}
+
+// ── Entradas (producción → almacén) ──────────────────────────────────────────
+function _almEntradasListHtml(){
+  const lista=_almMovs.filter(m=>m.tipo==='entrada'||m.tipo==='inicial').slice().reverse().slice(0,15);
+  if(!lista.length)return '<div class="empty"><span class="empty-icon">📥</span><p>Sin entradas registradas.</p></div>';
+  return lista.map(m=>{
+    const p=getProd(m.prodId);
+    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="min-width:0"><div style="font-weight:700;font-size:13px">${p?p.emoji+' '+p.nombre:m.prodId}</div>
+      <div style="font-size:11px;color:var(--muted)">${_fBo(m.fecha)} ${m.hora||''}${m.origen?' · '+m.origen:m.tipo==='inicial'?' · Inventario inicial':''}${m.lote?' · Lote '+m.lote:''}${m.nota?' · '+m.nota:''}</div></div>
+      <span class="pill ${m.tipo==='inicial'?'pill-blue':'pill-green'}">${m.tipo==='inicial'?'🏁 ':'+'}${m.cantEntrada} uds.</span>
+    </div>`;
+  }).join('');
+}
+
+function _almViewEntradas(el){
+  const hoy=todayStr();
+  el.innerHTML=`
+    <div class="panel alm-form">
+      <div class="panel-header"><span class="panel-title">📥 Registrar entrada — producción → almacén</span></div>
+      <div class="form-row">
+        <div class="field"><label>Fecha</label><input type="date" id="alm-en-fecha" value="${hoy}" max="${hoy}"></div>
+        <div class="field"><label>Producto</label><select id="alm-en-prod"><option value="">— Seleccionar —</option>${PRODUCTOS.map(p=>`<option value="${p.id}">${p.emoji} ${p.nombre}</option>`).join('')}</select></div>
+        <div class="field"><label>Cantidad que entra</label><input type="number" id="alm-en-cant" min="1" inputmode="numeric" placeholder="ej. 50"></div>
+      </div>
+      <div class="form-row">
+        <div class="field"><label>Origen</label><input type="text" id="alm-en-origen" value="Producción"></div>
+        <div class="field"><label>N° de lote / referencia</label><input type="text" id="alm-en-lote" placeholder="opcional"></div>
+        <div class="field"><label>Nota</label><input type="text" id="alm-en-nota" placeholder="opcional"></div>
+      </div>
+      <button class="btn btn-teal" style="width:100%;justify-content:center;padding:14px;font-size:15px" onclick="almRegistrarEntrada()">✓ Registrar entrada</button>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px;text-align:center">Podés registrar varias entradas seguidas: el formulario queda listo para la siguiente.</div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Últimas entradas</span></div>
+      <div id="alm-en-list">${_almEntradasListHtml()}</div>
+    </div>`;
+}
+
+function almRegistrarEntrada(){
+  if(!_almGuard())return;
+  const fecha=document.getElementById('alm-en-fecha').value;
+  const prodId=document.getElementById('alm-en-prod').value;
+  const cant=parseInt(document.getElementById('alm-en-cant').value,10);
+  const origen=document.getElementById('alm-en-origen').value.trim()||'Producción';
+  const lote=document.getElementById('alm-en-lote').value.trim();
+  const nota=document.getElementById('alm-en-nota').value.trim();
+  if(!fecha){toast('⚠️ Seleccioná la fecha');return;}
+  if(!prodId){toast('⚠️ Seleccioná un producto');return;}
+  if(!Number.isInteger(cant)||cant<=0){toast('⚠️ La cantidad debe ser un entero mayor a 0');return;}
+  const p=getProd(prodId);
+  const now=new Date();
+  const mov={fecha,hora:now.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'}),ts:Date.now(),prodId,tipo:'entrada',cantEntrada:cant,cantSalida:0,efectivo:0,qr:0,origen,lote,nota,detalle:'Entrada desde '+origen+(lote?' · Lote '+lote:''),registradoPor:'Administrador'};
+  db.ref('miAlmacen/movimientos').push(mov).then(()=>{
+    toast(`✅ +${cant} ${p?p.nombre:prodId} en Mi Almacén`);
+    // Registro en cadena: se limpian producto/cantidad, se conservan fecha y origen
+    document.getElementById('alm-en-prod').value='';
+    document.getElementById('alm-en-cant').value='';
+    document.getElementById('alm-en-lote').value='';
+    document.getElementById('alm-en-nota').value='';
+    _almFetch().then(()=>{const l=document.getElementById('alm-en-list');if(l)l.innerHTML=_almEntradasListHtml();});
+    document.getElementById('alm-en-prod').focus();
+  }).catch(()=>toast('❌ Error al registrar la entrada'));
+}
+
+// ── Salidas (sin nombres de clientes) ────────────────────────────────────────
+function _almSalidasListHtml(){
+  const lista=_almMovs.filter(m=>ALM_SALIDA_SET.includes(m.tipo)).slice().reverse().slice(0,15);
+  if(!lista.length)return '<div class="empty"><span class="empty-icon">📤</span><p>Sin salidas registradas.</p></div>';
+  return lista.map(m=>{
+    const p=getProd(m.prodId);
+    const dinero=(m.efectivo||0)+(m.qr||0);
+    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="min-width:0"><div style="font-weight:700;font-size:13px">${p?p.emoji+' '+p.nombre:m.prodId} ×${m.cantSalida}</div>
+      <div style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap">${_fBo(m.fecha)} ${m.hora||''} ${_almPill(m.tipo)}${m.nota?' · '+m.nota:''}</div></div>
+      <div style="text-align:right;white-space:nowrap"><div style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--teal-dark)">${dinero>0?fmt(dinero):'—'}</div>${dinero>0?`<div style="font-size:10px;color:var(--muted)">💵 ${(m.efectivo||0).toFixed(2)} · 📱 ${(m.qr||0).toFixed(2)}</div>`:''}</div>
+    </div>`;
+  }).join('');
+}
+
+function _almViewSalidas(el){
+  const hoy=todayStr();
+  el.innerHTML=`
+    <div class="panel alm-form">
+      <div class="panel-header"><span class="panel-title">📤 Registrar salida del almacén</span></div>
+      <div class="form-row">
+        <div class="field"><label>Fecha</label><input type="date" id="alm-sa-fecha" value="${hoy}" max="${hoy}"></div>
+        <div class="field"><label>Producto</label><select id="alm-sa-prod" onchange="almSalidaSugerir()"><option value="">— Seleccionar —</option>${PRODUCTOS.map(p=>`<option value="${p.id}">${p.emoji} ${p.nombre} — Bs. ${p.precio}</option>`).join('')}</select></div>
+        <div class="field"><label>Cantidad que sale</label><input type="number" id="alm-sa-cant" min="1" inputmode="numeric" placeholder="0" oninput="almSalidaSugerir()"></div>
+      </div>
+      <div class="form-row">
+        <div class="field"><label>Tipo de salida</label><select id="alm-sa-tipo" onchange="almSalidaTipoChange()">${ALM_TIPOS_SALIDA.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></div>
+        <div class="field"><label>Entró en Efectivo (Bs.)</label><input type="number" id="alm-sa-ef" min="0" step="0.01" inputmode="decimal" placeholder="0" oninput="this.dataset.manual='1'"></div>
+        <div class="field"><label>Entró en QR (Bs.)</label><input type="number" id="alm-sa-qr" min="0" step="0.01" inputmode="decimal" placeholder="0"></div>
+      </div>
+      <div class="field" style="margin-bottom:14px"><label>Nota (opcional — ej. referencia del acta firmada)</label><input type="text" id="alm-sa-nota" placeholder="opcional"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;padding:14px;font-size:15px" onclick="almRegistrarSalida()">✓ Registrar salida</button>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px;text-align:center">En ventas el efectivo se precarga con cantidad × precio. Editálo si el pago fue distinto o mixto con QR.</div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Últimas salidas</span></div>
+      <div id="alm-sa-list">${_almSalidasListHtml()}</div>
+    </div>`;
+}
+
+function almSalidaTipoChange(){
+  const ef=document.getElementById('alm-sa-ef');
+  const qr=document.getElementById('alm-sa-qr');
+  if(!ef)return;
+  ef.dataset.manual='';
+  if(document.getElementById('alm-sa-tipo').value!=='venta'){ef.value='';if(qr)qr.value='';}
+  else almSalidaSugerir();
+}
+
+function almSalidaSugerir(){
+  if(document.getElementById('alm-sa-tipo')?.value!=='venta')return;
+  const ef=document.getElementById('alm-sa-ef');
+  if(!ef||ef.dataset.manual==='1')return;
+  const p=getProd(document.getElementById('alm-sa-prod').value);
+  const cant=parseInt(document.getElementById('alm-sa-cant').value,10);
+  if(p&&Number.isInteger(cant)&&cant>0)ef.value=(p.precio*cant).toFixed(2);
+}
+
+function almRegistrarSalida(){
+  if(!_almGuard())return;
+  const fecha=document.getElementById('alm-sa-fecha').value;
+  const prodId=document.getElementById('alm-sa-prod').value;
+  const cant=parseInt(document.getElementById('alm-sa-cant').value,10);
+  const tipo=document.getElementById('alm-sa-tipo').value;
+  const ef=parseFloat(document.getElementById('alm-sa-ef').value)||0;
+  const qr=parseFloat(document.getElementById('alm-sa-qr').value)||0;
+  const nota=document.getElementById('alm-sa-nota').value.trim();
+  if(!fecha){toast('⚠️ Seleccioná la fecha');return;}
+  if(!prodId){toast('⚠️ Seleccioná un producto');return;}
+  if(!Number.isInteger(cant)||cant<=0){toast('⚠️ La cantidad debe ser un entero mayor a 0');return;}
+  if(ef<0||qr<0){toast('⚠️ Los montos no pueden ser negativos');return;}
+  const p=getProd(prodId);
+  const nuevoSaldo=(_almSaldos[prodId]||0)-cant;
+  // Advertencia sin bloquear: saldo negativo suele indicar error de registro
+  if(nuevoSaldo<0&&!confirm(`⚠️ Esta salida deja el saldo de ${p?p.nombre:prodId} en ${nuevoSaldo} (negativo).\nSuele indicar un error de registro. ¿Registrar de todos modos?`))return;
+  const now=new Date();
+  const mov={fecha,hora:now.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'}),ts:Date.now(),prodId,tipo,cantEntrada:0,cantSalida:cant,efectivo:ef,qr,nota,detalle:(ALM_TIPO_LBL[tipo]||tipo)+' ×'+cant,registradoPor:'Administrador'};
+  db.ref('miAlmacen/movimientos').push(mov).then(()=>{
+    toast(`✅ Salida: ${cant} ${p?p.nombre:prodId} (${ALM_TIPO_LBL[tipo]||tipo})`);
+    // Registro en cadena: formulario listo para la siguiente salida
+    document.getElementById('alm-sa-prod').value='';
+    document.getElementById('alm-sa-cant').value='';
+    const efEl=document.getElementById('alm-sa-ef');efEl.value='';efEl.dataset.manual='';
+    document.getElementById('alm-sa-qr').value='';
+    document.getElementById('alm-sa-nota').value='';
+    _almFetch().then(()=>{const l=document.getElementById('alm-sa-list');if(l)l.innerHTML=_almSalidasListHtml();});
+    document.getElementById('alm-sa-prod').focus();
+  }).catch(()=>toast('❌ Error al registrar la salida'));
+}
+
+// ── Egresos ──────────────────────────────────────────────────────────────────
+function _almEgresoPill(estado){
+  if(estado==='validado')return '<span class="pill pill-green">✅ Validado</span>';
+  if(estado==='observado')return '<span class="pill pill-amber">⚠️ Observado</span>';
+  return '<span class="pill pill-gray">🕓 Pendiente de revisar</span>';
+}
+
+function _almViewEgresos(el){
+  const hoy=todayStr();
+  el.innerHTML=`
+    <div class="panel alm-form">
+      <div class="panel-header"><span class="panel-title">💸 Registrar egreso — Mi Almacén</span></div>
+      <div class="form-row">
+        <div class="field"><label>Fecha</label><input type="date" id="alm-eg-fecha" value="${hoy}" max="${hoy}"></div>
+        <div class="field"><label>Monto (Bs.)</label><input type="number" id="alm-eg-monto" min="0" step="0.01" inputmode="decimal" placeholder="0"></div>
+        <div class="field"><label>Descripción (obligatoria)</label><input type="text" id="alm-eg-desc" placeholder="ej. compra de bolsas, transporte..."></div>
+      </div>
+      <button class="btn btn-danger" style="width:100%;justify-content:center;padding:14px;font-size:15px" onclick="almRegistrarEgreso()">✓ Registrar egreso</button>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Egresos registrados</span>
+        <div class="btn-row">
+          <select id="alm-eg-festado" onchange="almListaEgresos()" style="font-size:12px;padding:6px 10px;border-radius:8px;width:auto">
+            <option value="">Todos los estados</option>
+            <option value="pendiente">🕓 Pendiente de revisar</option>
+            <option value="validado">✅ Validado</option>
+            <option value="observado">⚠️ Observado</option>
+          </select>
+          <input type="date" id="alm-eg-ffecha" onchange="almListaEgresos()" style="font-size:12px;padding:6px 10px;border-radius:8px;width:auto" title="Filtrar por fecha">
+        </div>
+      </div>
+      <div id="alm-eg-list"></div>
+    </div>`;
+  almListaEgresos();
+}
+
+function almListaEgresos(){
+  const fe=document.getElementById('alm-eg-festado')?.value||'';
+  const ff=document.getElementById('alm-eg-ffecha')?.value||'';
+  const el=document.getElementById('alm-eg-list');if(!el)return;
+  let lista=[..._almEgresos];
+  if(fe)lista=lista.filter(e=>(e.estado||'pendiente')===fe);
+  if(ff)lista=lista.filter(e=>e.fecha===ff);
+  lista.sort((a,b)=>((b.fecha||'')+' '+(b.hora||'')).localeCompare((a.fecha||'')+' '+(a.hora||''))||(b.ts||0)-(a.ts||0));
+  if(!lista.length){el.innerHTML='<div class="empty"><span class="empty-icon">💸</span><p>Sin egresos con esos filtros.</p></div>';return;}
+  const total=lista.reduce((s,e)=>s+(e.monto||0),0);
+  el.innerHTML=`<div style="font-size:12px;color:var(--muted);font-weight:600;margin-bottom:8px">${lista.length} egreso${lista.length!==1?'s':''} — total ${fmt(total)}</div>`+lista.map(e=>{
+    const estado=e.estado||'pendiente';
+    return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <div style="min-width:0;flex:1"><div style="font-weight:700;font-size:13px">${e.descripcion||'—'}</div>
+        <div style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px">${_fBo(e.fecha)} ${e.hora||''} ${_almEgresoPill(estado)}</div></div>
+        <span style="font-family:'JetBrains Mono',monospace;font-weight:800;color:var(--red)">-${fmt(e.monto||0)}</span>
+      </div>
+      ${estado==='pendiente'?`<div class="btn-row" style="margin-top:8px">
+        <button class="btn btn-teal btn-sm" onclick="almSetEgresoEstado('${e._key}','validado')">✅ Validar</button>
+        <button class="btn btn-ghost btn-sm" onclick="almSetEgresoEstado('${e._key}','observado')">⚠️ Observar</button>
+      </div>`:`<div class="btn-row" style="margin-top:8px"><button class="btn btn-ghost btn-sm" onclick="almSetEgresoEstado('${e._key}','pendiente')">↺ Volver a pendiente</button></div>`}
+    </div>`;
+  }).join('');
+}
+
+function almRegistrarEgreso(){
+  if(!_almGuard())return;
+  const fecha=document.getElementById('alm-eg-fecha').value;
+  const monto=parseFloat(document.getElementById('alm-eg-monto').value)||0;
+  const desc=document.getElementById('alm-eg-desc').value.trim();
+  if(!fecha){toast('⚠️ Seleccioná la fecha');return;}
+  if(monto<=0){toast('⚠️ Ingresá el monto del egreso');return;}
+  if(!desc){toast('⚠️ La descripción es obligatoria');return;}
+  const now=new Date();
+  db.ref('miAlmacen/egresos').push({fecha,hora:now.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'}),ts:Date.now(),monto,descripcion:desc,estado:'pendiente',registradoPor:'Administrador'}).then(()=>{
+    toast(`💸 Egreso de ${fmt(monto)} registrado`);
+    document.getElementById('alm-eg-monto').value='';
+    document.getElementById('alm-eg-desc').value='';
+    _almFetch().then(()=>almListaEgresos());
+  }).catch(()=>toast('❌ Error al registrar el egreso'));
+}
+
+function almSetEgresoEstado(key,estado){
+  if(!_almGuard())return;
+  db.ref('miAlmacen/egresos/'+key+'/estado').set(estado).then(()=>{
+    toast(estado==='validado'?'✅ Egreso validado':estado==='observado'?'⚠️ Egreso marcado como observado':'↺ Egreso vuelto a pendiente');
+    _almFetch().then(()=>almListaEgresos());
+  }).catch(()=>toast('❌ Error al actualizar el estado'));
+}
+
+// ── Resumen del día + arqueo ─────────────────────────────────────────────────
+function _almResumenCalc(f){
+  const iniPor={},dia={};
+  PRODUCTOS.forEach(p=>{iniPor[p.id]=0;dia[p.id]={ent:0,venta:0,regalia:0,degustacion:0,merma:0,otro:0,aj:0};});
+  let ef=0,qr=0;
+  _almMovs.forEach(m=>{
+    if(!dia[m.prodId]){dia[m.prodId]={ent:0,venta:0,regalia:0,degustacion:0,merma:0,otro:0,aj:0};iniPor[m.prodId]=iniPor[m.prodId]||0;}
+    const neto=(m.cantEntrada||0)-(m.cantSalida||0);
+    if(m.fecha<f)iniPor[m.prodId]+=neto;
+    else if(m.fecha===f){
+      const d=dia[m.prodId];
+      if(m.tipo==='entrada'||m.tipo==='inicial')d.ent+=(m.cantEntrada||0);
+      else if(m.tipo==='ajuste')d.aj+=neto;
+      else if(d[m.tipo]!==undefined)d[m.tipo]+=(m.cantSalida||0);
+      ef+=(m.efectivo||0);qr+=(m.qr||0);
+    }
+  });
+  const egresosDia=_almEgresos.filter(e=>e.fecha===f);
+  const totalEgresos=egresosDia.reduce((s,e)=>s+(e.monto||0),0);
+  return {iniPor,dia,ef,qr,totalEgresos,egresosDia};
+}
+
+function _almViewResumen(el){
+  const hoy=todayStr();
+  el.innerHTML=`
+    <div class="panel alm-form" style="margin-bottom:16px">
+      <div class="panel-header"><span class="panel-title">📅 Resumen del día — cuadre automático</span></div>
+      <div class="form-row" style="margin-bottom:0">
+        <div class="field"><label>Fecha</label><input type="date" id="alm-res-fecha" value="${hoy}" max="${hoy}" onchange="almRenderResumenDia()"></div>
+      </div>
+    </div>
+    <div id="alm-res-body"></div>`;
+  almRenderResumenDia();
+}
+
+function almRenderResumenDia(){
+  const f=document.getElementById('alm-res-fecha')?.value||todayStr();
+  const el=document.getElementById('alm-res-body');if(!el)return;
+  const rc=_almResumenCalc(f);
+  const esperado=parseFloat((rc.ef-rc.totalEgresos).toFixed(2));
+  _almEsperadoActual=esperado;
+  const filas=PRODUCTOS.map(p=>{
+    const d=rc.dia[p.id],ini=rc.iniPor[p.id]||0;
+    const salidas=d.venta+d.regalia+d.degustacion+d.merma+d.otro;
+    return {p,ini,d,salidas,fin:ini+d.ent-salidas+d.aj,tuvoMov:!!(d.ent||salidas||d.aj)};
+  });
+  const hayMovs=filas.some(x=>x.tuvoMov);
+  const ordenar=arr=>arr.sort((a,b)=>(b.ts||0)-(a.ts||0));
+  const cuadresDia=ordenar(_almCuadres.filter(c=>c.fecha===f));
+  const otrosCuadres=_almCuadres.filter(c=>c.fecha!==f).sort((a,b)=>((b.fecha||'')+' ').localeCompare((a.fecha||'')+' ')||(b.ts||0)-(a.ts||0)).slice(0,8);
+  const cuadreHtml=cq=>{
+    const ok=Math.abs(cq.diferencia||0)<0.01;
+    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
+      <div><div style="font-weight:700;font-size:13px">${_fBo(cq.fecha)} ${cq.hora||''}</div>
+      <div style="font-size:11px;color:var(--muted)">Esperado ${fmt(cq.esperado||0)} · Contado ${fmt(cq.contado||0)}${cq.nota?' · 📝 '+cq.nota:''}</div></div>
+      <span class="pill ${ok?'pill-green':'pill-red'}">${ok?'✅ Cuadra':(cq.diferencia<0?'❌ Faltan '+fmt(-cq.diferencia):'⚠️ Sobran '+fmt(cq.diferencia))}</span>
+    </div>`;
+  };
+  el.innerHTML=`
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">📦 Productos — ${_fBo(f)}</span></div>
+      ${hayMovs?`<div class="table-wrap"><table><thead><tr><th>Producto</th><th>Saldo inicial</th><th>Entradas</th><th>Ventas</th><th>Regalías</th><th>Degust.</th><th>Mermas</th><th>Otros</th><th>Ajustes</th><th>Saldo final</th></tr></thead><tbody>
+      ${filas.map(x=>`<tr${x.tuvoMov?'':' style="opacity:.45"'}><td style="font-weight:600;white-space:nowrap">${x.p.emoji} ${x.p.nombre}</td><td style="font-family:'JetBrains Mono',monospace">${x.ini}</td><td style="font-family:'JetBrains Mono',monospace;color:var(--teal-dark);font-weight:700">${x.d.ent||''}</td><td style="font-family:'JetBrains Mono',monospace">${x.d.venta||''}</td><td style="font-family:'JetBrains Mono',monospace">${x.d.regalia||''}</td><td style="font-family:'JetBrains Mono',monospace">${x.d.degustacion||''}</td><td style="font-family:'JetBrains Mono',monospace">${x.d.merma||''}</td><td style="font-family:'JetBrains Mono',monospace">${x.d.otro||''}</td><td style="font-family:'JetBrains Mono',monospace">${x.d.aj?(x.d.aj>0?'+':'')+x.d.aj:''}</td><td style="font-family:'JetBrains Mono',monospace;font-weight:800;color:${x.fin<0?'var(--red)':'var(--text)'}">${x.fin}</td></tr>`).join('')}
+      </tbody></table></div>`:'<div class="empty"><span class="empty-icon">📦</span><p>Sin movimientos de productos ese día.</p></div>'}
+    </div>
+    <div class="kpi-row">
+      <div class="kpi-card"><div class="kpi-icon">💵</div><div class="kpi-label">Efectivo ingresado</div><div class="kpi-val" style="color:var(--purple)">${fmt(rc.ef)}</div></div>
+      <div class="kpi-card"><div class="kpi-icon">📱</div><div class="kpi-label">QR ingresado</div><div class="kpi-val" style="color:var(--blue)">${fmt(rc.qr)}</div></div>
+      <div class="kpi-card"><div class="kpi-icon">💰</div><div class="kpi-label">Total ingresos</div><div class="kpi-val" style="color:var(--teal-dark)">${fmt(rc.ef+rc.qr)}</div></div>
+      <div class="kpi-card"><div class="kpi-icon">💸</div><div class="kpi-label">Total egresos</div><div class="kpi-val" style="color:var(--red)">-${fmt(rc.totalEgresos)}</div><div class="kpi-sub">${rc.egresosDia.length} egreso${rc.egresosDia.length!==1?'s':''}</div></div>
+      <div class="kpi-card" style="border-color:var(--teal)"><div class="kpi-icon">🏦</div><div class="kpi-label">Efectivo que debe haber</div><div class="kpi-val" style="color:var(--teal-dark)">${fmt(esperado)}</div><div class="kpi-sub">efectivo − egresos</div></div>
+    </div>
+    <div class="panel alm-form">
+      <div class="panel-header"><span class="panel-title">🧮 Arqueo de caja — ${_fBo(f)}</span></div>
+      <div class="form-row">
+        <div class="field"><label>Efectivo físico contado (Bs.)</label><input type="number" id="alm-arq-contado" min="0" step="0.01" inputmode="decimal" placeholder="0" oninput="almCalcArqueo()"></div>
+        <div class="field"><label>Nota del cuadre</label><input type="text" id="alm-arq-nota" placeholder="opcional"></div>
+      </div>
+      <div id="alm-arq-dif" style="display:none;margin-bottom:14px;font-size:14px;font-weight:800;padding:12px 14px;border-radius:10px"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;padding:14px;font-size:15px" onclick="almGuardarCuadre()">💾 Guardar cuadre del día</button>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Historial de cuadres — ${_fBo(f)}</span></div>
+      ${cuadresDia.length?cuadresDia.map(cuadreHtml).join(''):'<div class="empty"><p>Sin cuadres guardados para esta fecha.</p></div>'}
+      ${otrosCuadres.length?`<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);padding:14px 0 4px">Otros cuadres recientes</div>${otrosCuadres.map(cuadreHtml).join('')}`:''}
+    </div>`;
+}
+
+function almCalcArqueo(){
+  const el=document.getElementById('alm-arq-dif');if(!el)return;
+  const v=document.getElementById('alm-arq-contado').value;
+  if(v===''){el.style.display='none';return;}
+  const contado=parseFloat(v)||0;
+  const dif=parseFloat((contado-_almEsperadoActual).toFixed(2));
+  el.style.display='block';
+  if(Math.abs(dif)<0.01){el.style.background='var(--teal-light)';el.style.color='var(--teal-dark)';el.textContent=`✅ CUADRA — Contado ${fmt(contado)} = Esperado ${fmt(_almEsperadoActual)}`;}
+  else if(dif<0){el.style.background='var(--red-light)';el.style.color='var(--red)';el.textContent=`❌ FALTAN ${fmt(-dif)} — Contado ${fmt(contado)} vs. esperado ${fmt(_almEsperadoActual)}`;}
+  else{el.style.background='var(--red-light)';el.style.color='var(--red)';el.textContent=`⚠️ SOBRAN ${fmt(dif)} — Contado ${fmt(contado)} vs. esperado ${fmt(_almEsperadoActual)}`;}
+}
+
+function almGuardarCuadre(){
+  if(!_almGuard())return;
+  const f=document.getElementById('alm-res-fecha')?.value||todayStr();
+  const v=document.getElementById('alm-arq-contado').value;
+  if(v===''){toast('⚠️ Ingresá el efectivo físico contado');return;}
+  const contado=parseFloat(v)||0;
+  const rc=_almResumenCalc(f);
+  const esperado=parseFloat((rc.ef-rc.totalEgresos).toFixed(2));
+  const dif=parseFloat((contado-esperado).toFixed(2));
+  const nota=document.getElementById('alm-arq-nota').value.trim();
+  const now=new Date();
+  db.ref('miAlmacen/cuadres').push({fecha:f,hora:now.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'}),ts:Date.now(),ingresosEfectivo:rc.ef,ingresosQR:rc.qr,egresos:rc.totalEgresos,esperado,contado,diferencia:dif,nota,guardadoPor:'Administrador'}).then(()=>{
+    toast(Math.abs(dif)<0.01?'✅ Cuadre guardado — la caja cuadra':`💾 Cuadre guardado — diferencia ${fmt(dif)}`);
+    _almFetch().then(()=>almRenderResumenDia());
+  }).catch(()=>toast('❌ Error al guardar el cuadre'));
+}
+
+// ── Kardex (formato contable, saldo corrido) ─────────────────────────────────
+function _almViewKardex(el){
+  el.innerHTML=`
+    <div class="panel alm-form" style="margin-bottom:16px">
+      <div class="panel-header"><span class="panel-title">📒 Kardex — filtros</span></div>
+      <div class="form-row">
+        <div class="field"><label>Producto</label><select id="alm-kdx-prod" onchange="almRenderKardex()"><option value="">📦 Todos (consolidado)</option>${PRODUCTOS.map(p=>`<option value="${p.id}">${p.emoji} ${p.nombre}</option>`).join('')}</select></div>
+        <div class="field"><label>Tipo de movimiento</label><select id="alm-kdx-tipo" onchange="almRenderKardex()"><option value="">Todos</option>${Object.entries(ALM_TIPO_LBL).map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></div>
+        <div class="field"><label>Desde</label><input type="date" id="alm-kdx-desde" onchange="almRenderKardex()"></div>
+        <div class="field"><label>Hasta</label><input type="date" id="alm-kdx-hasta" onchange="almRenderKardex()"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-ghost btn-sm" onclick="almKdxRango('dia')">Hoy</button>
+        <button class="btn btn-ghost btn-sm" onclick="almKdxRango('semana')">Última semana</button>
+        <button class="btn btn-ghost btn-sm" onclick="almKdxRango('mes')">Este mes</button>
+        <button class="btn btn-ghost btn-sm" onclick="almKdxRango('todo')">Todo</button>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Kardex de movimientos</span></div>
+      <div id="alm-kdx-body"></div>
+    </div>`;
+  document.getElementById('alm-kdx-prod').value=_almKdx.prod;
+  document.getElementById('alm-kdx-tipo').value=_almKdx.tipo;
+  document.getElementById('alm-kdx-desde').value=_almKdx.desde;
+  document.getElementById('alm-kdx-hasta').value=_almKdx.hasta;
+  almRenderKardex();
+}
+
+function almKdxRango(r){
+  const hoy=todayStr();let desde='',hasta=hoy;
+  if(r==='dia')desde=hoy;
+  else if(r==='semana'){const d=new Date();d.setDate(d.getDate()-6);desde=localDateStr(d);}
+  else if(r==='mes')desde=hoy.slice(0,7)+'-01';
+  else{desde='';hasta='';}
+  document.getElementById('alm-kdx-desde').value=desde;
+  document.getElementById('alm-kdx-hasta').value=hasta;
+  almRenderKardex();
+}
+
+function almRenderKardex(){
+  const prod=document.getElementById('alm-kdx-prod')?.value||'';
+  const tipo=document.getElementById('alm-kdx-tipo')?.value||'';
+  const desde=document.getElementById('alm-kdx-desde')?.value||'';
+  const hasta=document.getElementById('alm-kdx-hasta')?.value||'';
+  _almKdx={prod,tipo,desde,hasta};
+  const el=document.getElementById('alm-kdx-body');if(!el)return;
+  // El saldo corrido (_saldo) viene precalculado cronológicamente sobre TODOS los movimientos
+  const lista=_almMovs.filter(m=>(!prod||m.prodId===prod)&&(!tipo||m.tipo===tipo)&&(!desde||m.fecha>=desde)&&(!hasta||m.fecha<=hasta));
+  let saldoAnterior=null;
+  if(prod&&desde){
+    saldoAnterior=0;
+    _almMovs.forEach(m=>{if(m.prodId===prod&&m.fecha<desde)saldoAnterior+=(m.cantEntrada||0)-(m.cantSalida||0);});
+  }
+  if(!lista.length&&saldoAnterior===null){el.innerHTML='<div class="empty"><span class="empty-icon">📒</span><p>Sin movimientos con esos filtros.</p></div>';return;}
+  const totEnt=lista.reduce((s,m)=>s+(m.cantEntrada||0),0);
+  const totSal=lista.reduce((s,m)=>s+(m.cantSalida||0),0);
+  const totEf=lista.reduce((s,m)=>s+(m.efectivo||0),0);
+  const totQr=lista.reduce((s,m)=>s+(m.qr||0),0);
+  const monoTot="font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--teal-dark)";
+  el.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Fecha</th>${prod?'':'<th>Producto</th>'}<th>Detalle / Concepto</th><th>Tipo</th><th>Entrada</th><th>Salida</th><th>Saldo</th><th>Efectivo (Bs.)</th><th>QR (Bs.)</th><th>Nota</th></tr></thead><tbody>
+    ${saldoAnterior!==null?`<tr style="background:var(--bg)"><td style="font-size:11px;font-family:'JetBrains Mono',monospace;white-space:nowrap">${_fBo(desde)}</td><td style="font-weight:700;font-size:12px" colspan="2">Saldo anterior</td><td></td><td></td><td style="font-weight:800;font-family:'JetBrains Mono',monospace">${saldoAnterior}</td><td></td><td></td><td></td></tr>`:''}
+    ${lista.map(m=>{const p=getProd(m.prodId);return `<tr>
+      <td style="font-size:11px;font-family:'JetBrains Mono',monospace;white-space:nowrap">${_fBo(m.fecha)}<br><span style="color:var(--muted)">${m.hora||''}</span></td>
+      ${prod?'':`<td style="font-weight:600;font-size:12px;white-space:nowrap">${p?p.emoji+' '+p.nombre:m.prodId}</td>`}
+      <td style="font-size:12px">${m.detalle||ALM_TIPO_LBL[m.tipo]||''}</td>
+      <td>${_almPill(m.tipo)}</td>
+      <td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--teal-dark)">${m.cantEntrada||''}</td>
+      <td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--red)">${m.cantSalida||''}</td>
+      <td style="font-family:'JetBrains Mono',monospace;font-weight:800;color:${m._saldo<0?'var(--red)':'var(--text)'}">${m._saldo}</td>
+      <td style="font-family:'JetBrains Mono',monospace">${m.efectivo?m.efectivo.toFixed(2):''}</td>
+      <td style="font-family:'JetBrains Mono',monospace">${m.qr?m.qr.toFixed(2):''}</td>
+      <td style="font-size:11px;color:var(--muted)">${m.nota||m.motivo||''}</td>
+    </tr>`;}).join('')}
+    <tr style="background:var(--teal-light)"><td colspan="${prod?3:4}" style="font-weight:800;text-align:right;color:var(--teal-dark)">TOTALES:</td><td style="${monoTot}">${totEnt}</td><td style="${monoTot}">${totSal}</td><td></td><td style="${monoTot}">${totEf.toFixed(2)}</td><td style="${monoTot}">${totQr.toFixed(2)}</td><td></td></tr>
+  </tbody></table></div>
+  <div style="font-size:11px;color:var(--muted);margin-top:8px">ℹ️ El saldo es corrido y se calcula cronológicamente sobre <strong>todos</strong> los movimientos del producto, aunque haya filtros activos.</div>`;
+}
+
+// ── Exportación a Excel (6 hojas, formato para auditoría) ────────────────────
+function _fBoG(f){return _fBo(f).replace(/\//g,'-');} // DD-MM-YYYY para nombre de archivo
+
+function _almStyleTable(ws,rHead,nRows,types){
+  _xrow(ws,rHead,0,types.length-1,_XS.th);
+  for(let i=0;i<nRows;i++){
+    const r=rHead+1+i,alt=i%2===1;
+    types.forEach((t,c)=>{_xset(ws,r,c,t==='m'?(alt?_XS.montoAlt:_XS.monto):t==='n'?(alt?_XS.numeroAlt:_XS.numero):(alt?_XS.celdaAlt:_XS.celda));});
+  }
+}
+
+function almAbrirExport(){
+  if(!_almGuard())return;
+  const hoy=todayStr();
+  document.getElementById('alm-exp-desde').value=hoy;
+  document.getElementById('alm-exp-hasta').value=hoy;
+  document.getElementById('almExportOverlay').classList.add('open');
+}
+
+function almSetExportRango(r){
+  const hoy=todayStr();let desde=hoy;
+  if(r==='semana'){const d=new Date();d.setDate(d.getDate()-6);desde=localDateStr(d);}
+  else if(r==='mes')desde=hoy.slice(0,7)+'-01';
+  document.getElementById('alm-exp-desde').value=desde;
+  document.getElementById('alm-exp-hasta').value=hoy;
+}
+
+function almExportExcel(){
+  if(!_almGuard())return;
+  if(typeof XLSX==='undefined'){toast('❌ La librería de Excel no cargó. Revisá la conexión.');return;}
+  const desde=document.getElementById('alm-exp-desde').value;
+  const hasta=document.getElementById('alm-exp-hasta').value;
+  if(!desde||!hasta){toast('⚠️ Seleccioná el rango de fechas');return;}
+  if(desde>hasta){toast('⚠️ La fecha "desde" es posterior a "hasta"');return;}
+  toast('⏳ Generando Excel de Mi Almacén...');
+  _almFetch().then(()=>{
+    try{
+      const wb=_almBuildWorkbook(desde,hasta);
+      const rango=desde===hasta?_fBoG(desde):`${_fBoG(desde)}_al_${_fBoG(hasta)}`;
+      XLSX.writeFile(wb,`NutriWave_Almacen_${rango}.xlsx`);
+      closeModal('almExportOverlay');
+      toast('📗 Excel de Mi Almacén descargado');
+    }catch(err){console.error('Error exportando Mi Almacén:',err);toast('❌ Error al generar el Excel');}
+  }).catch(()=>toast('❌ Error al leer los datos de Mi Almacén'));
+}
+
+function _almBuildWorkbook(desde,hasta){
+  const wb=XLSX.utils.book_new();
+  const now=new Date();
+  const periodo=_fBo(desde)+' al '+_fBo(hasta);
+  const enRango=x=>x.fecha>=desde&&x.fecha<=hasta;
+  const movsR=_almMovs.filter(enRango);
+  const salidasR=movsR.filter(m=>ALM_SALIDA_SET.includes(m.tipo));
+  const ajustesR=movsR.filter(m=>m.tipo==='ajuste');
+  const entTodas=movsR.filter(m=>m.tipo==='entrada'||m.tipo==='inicial');
+  const ordAsc=(a,b)=>((a.fecha||'')+' '+(a.hora||'')).localeCompare((b.fecha||'')+' '+(b.hora||''))||(a.ts||0)-(b.ts||0);
+  const egresosR=_almEgresos.filter(enRango).sort(ordAsc);
+  const cuadresR=_almCuadres.filter(enRango).sort(ordAsc);
+  // Saldos por producto al inicio y al cierre del período
+  const iniPor={},finPor={};
+  PRODUCTOS.forEach(p=>{iniPor[p.id]=0;finPor[p.id]=0;});
+  _almMovs.forEach(m=>{
+    if(iniPor[m.prodId]===undefined){iniPor[m.prodId]=0;finPor[m.prodId]=0;}
+    const neto=(m.cantEntrada||0)-(m.cantSalida||0);
+    if(m.fecha<desde)iniPor[m.prodId]+=neto;
+    if(m.fecha<=hasta)finPor[m.prodId]+=neto;
+  });
+  const efR=movsR.reduce((s,m)=>s+(m.efectivo||0),0);
+  const qrR=movsR.reduce((s,m)=>s+(m.qr||0),0);
+  const egrTot=egresosR.reduce((s,e)=>s+(e.monto||0),0);
+  const salPorTipo={};
+  salidasR.forEach(m=>{salPorTipo[m.tipo]=(salPorTipo[m.tipo]||0)+(m.cantSalida||0);});
+  const ajNeto=ajustesR.reduce((s,m)=>s+(m.cantEntrada||0)-(m.cantSalida||0),0);
+
+  // ══ HOJA 1: Resumen ══
+  const r1=[];
+  r1.push(['NutriWave — Mi Almacén']);
+  r1.push(['Período del reporte:',periodo]);
+  r1.push(['Generado el:',now.toLocaleDateString('es-BO')+' '+now.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'})]);
+  r1.push(['Generado por:','Administrador']);
+  r1.push([]);
+  const rInv=r1.length;
+  r1.push(['INVENTARIO DEL PERÍODO']);
+  r1.push(['Producto','Saldo inicial','Entradas','Salidas','Ajustes (±)','Saldo final']);
+  let totEntP=0,totSalP=0;
+  const invRows=PRODUCTOS.map(p=>{
+    const ent=entTodas.filter(m=>m.prodId===p.id).reduce((s,m)=>s+(m.cantEntrada||0),0);
+    const sal=salidasR.filter(m=>m.prodId===p.id).reduce((s,m)=>s+(m.cantSalida||0),0);
+    const aj=ajustesR.filter(m=>m.prodId===p.id).reduce((s,m)=>s+(m.cantEntrada||0)-(m.cantSalida||0),0);
+    totEntP+=ent;totSalP+=sal;
+    return [p.nombre,iniPor[p.id]||0,ent,sal,aj,finPor[p.id]||0];
+  });
+  invRows.forEach(x=>r1.push(x));
+  const rInvTot=r1.length;
+  r1.push(['TOTALES','',totEntP,totSalP,ajNeto,'']);
+  r1.push([]);
+  const rDin=r1.length;
+  r1.push(['DINERO DEL PERÍODO']);
+  r1.push(['Concepto','Monto']);
+  const dinRows=[
+    ['Total ingresos en efectivo',efR],
+    ['Total ingresos por QR',qrR],
+    ['TOTAL INGRESOS',efR+qrR],
+    ['Total egresos',egrTot],
+    ['Efectivo que debe haber (efectivo − egresos)',efR-egrTot],
+  ];
+  dinRows.forEach(x=>r1.push(x));
+  r1.push([]);
+  const rSt=r1.length;
+  r1.push(['SALIDAS POR TIPO (unidades)']);
+  r1.push(['Tipo','Unidades']);
+  const stRows=ALM_TIPOS_SALIDA.map(x=>[ALM_TIPO_LBL[x[0]],salPorTipo[x[0]]||0]);
+  stRows.forEach(x=>r1.push(x));
+  r1.push([]);
+  const rArq=r1.length;
+  r1.push(['ARQUEOS REGISTRADOS EN EL PERÍODO']);
+  r1.push(['Fecha','Esperado','Contado','Diferencia','Nota']);
+  const arqRows=cuadresR.length?cuadresR.map(cq=>[_fBo(cq.fecha),cq.esperado||0,cq.contado||0,cq.diferencia||0,cq.nota||'']):[['Sin arqueos registrados en el período','','','','']];
+  arqRows.forEach(x=>r1.push(x));
+  const ws1=XLSX.utils.aoa_to_sheet(r1);
+  ws1['!cols']=[{wch:40},{wch:14},{wch:12},{wch:12},{wch:12},{wch:12}];
+  ws1['!merges']=[
+    {s:{r:0,c:0},e:{r:0,c:5}},
+    {s:{r:rInv,c:0},e:{r:rInv,c:5}},
+    {s:{r:rDin,c:0},e:{r:rDin,c:5}},
+    {s:{r:rSt,c:0},e:{r:rSt,c:5}},
+    {s:{r:rArq,c:0},e:{r:rArq,c:5}},
+  ];
+  _xset(ws1,0,0,_XS.titulo);
+  [1,2,3].forEach(r=>{_xset(ws1,r,0,_XS.meta);_xset(ws1,r,1,_XS.metaVal);});
+  _xrow(ws1,rInv,0,5,_XS.seccionP);
+  _almStyleTable(ws1,rInv+1,invRows.length,['s','n','n','n','n','n']);
+  for(let c=0;c<=5;c++)_xset(ws1,rInvTot,c,_XS.totalRow);
+  _xrow(ws1,rDin,0,5,_XS.seccionT);
+  _almStyleTable(ws1,rDin+1,dinRows.length,['s','m']);
+  _xrow(ws1,rSt,0,5,_XS.seccionP);
+  _almStyleTable(ws1,rSt+1,stRows.length,['s','n']);
+  _xrow(ws1,rArq,0,5,_XS.seccionT);
+  _almStyleTable(ws1,rArq+1,arqRows.length,['s','m','m','m','s']);
+  XLSX.utils.book_append_sheet(wb,ws1,'Resumen');
+
+  // ══ HOJA 2: Kardex detallado (saldo corrido, igual que en pantalla) ══
+  const h2=['Fecha','Hora','Producto','Detalle / Concepto','Tipo de movimiento','Entrada (uds.)','Salida (uds.)','Saldo (uds.)','Efectivo (Bs.)','QR (Bs.)','Nota'];
+  const r2=[['Kardex detallado — '+periodo],[],h2];
+  movsR.forEach(m=>{
+    const p=getProd(m.prodId);
+    r2.push([_fBo(m.fecha),m.hora||'',p?p.nombre:m.prodId,m.detalle||'',ALM_TIPO_LBL[m.tipo]||m.tipo,m.cantEntrada||0,m.cantSalida||0,m._saldo,m.efectivo||0,m.qr||0,m.nota||m.motivo||'']);
+  });
+  if(!movsR.length)r2.push(['Sin movimientos en el período']);
+  const ws2=XLSX.utils.aoa_to_sheet(r2);
+  ws2['!cols']=[{wch:11},{wch:7},{wch:18},{wch:36},{wch:18},{wch:12},{wch:12},{wch:11},{wch:13},{wch:13},{wch:28}];
+  ws2['!merges']=[{s:{r:0,c:0},e:{r:0,c:10}}];
+  _xset(ws2,0,0,_XS.titulo);
+  _almStyleTable(ws2,2,Math.max(movsR.length,1),['s','s','s','s','s','n','n','n','m','m','s']);
+  XLSX.utils.book_append_sheet(wb,ws2,'Kardex detallado');
+
+  // ══ HOJA 3: Entradas ══
+  const h3=['Fecha','Hora','Producto','Cantidad','Origen','N° lote / Ref.','Nota'];
+  const r3=[['Entradas — '+periodo],[],h3];
+  entTodas.forEach(m=>{
+    const p=getProd(m.prodId);
+    r3.push([_fBo(m.fecha),m.hora||'',p?p.nombre:m.prodId,m.cantEntrada||0,m.tipo==='inicial'?'Inventario inicial':(m.origen||'Producción'),m.lote||'',m.nota||'']);
+  });
+  const r3n=Math.max(entTodas.length,1);
+  if(!entTodas.length)r3.push(['Sin entradas en el período']);
+  else r3.push(['','','TOTAL',entTodas.reduce((s,m)=>s+(m.cantEntrada||0),0),'','','']);
+  const ws3=XLSX.utils.aoa_to_sheet(r3);
+  ws3['!cols']=[{wch:11},{wch:7},{wch:20},{wch:10},{wch:20},{wch:16},{wch:28}];
+  ws3['!merges']=[{s:{r:0,c:0},e:{r:0,c:6}}];
+  _xset(ws3,0,0,_XS.titulo);
+  _almStyleTable(ws3,2,r3n,['s','s','s','n','s','s','s']);
+  if(entTodas.length)for(let c=0;c<=6;c++)_xset(ws3,3+entTodas.length,c,_XS.totalRow);
+  XLSX.utils.book_append_sheet(wb,ws3,'Entradas');
+
+  // ══ HOJA 4: Salidas ══
+  const h4=['Fecha','Hora','Producto','Cantidad','Tipo','Efectivo (Bs.)','QR (Bs.)','Nota'];
+  const r4=[['Salidas — '+periodo],[],h4];
+  salidasR.forEach(m=>{
+    const p=getProd(m.prodId);
+    r4.push([_fBo(m.fecha),m.hora||'',p?p.nombre:m.prodId,m.cantSalida||0,ALM_TIPO_LBL[m.tipo]||m.tipo,m.efectivo||0,m.qr||0,m.nota||'']);
+  });
+  const r4n=Math.max(salidasR.length,1);
+  if(!salidasR.length)r4.push(['Sin salidas en el período']);
+  else r4.push(['','','TOTAL',salidasR.reduce((s,m)=>s+(m.cantSalida||0),0),'',salidasR.reduce((s,m)=>s+(m.efectivo||0),0),salidasR.reduce((s,m)=>s+(m.qr||0),0),'']);
+  const ws4=XLSX.utils.aoa_to_sheet(r4);
+  ws4['!cols']=[{wch:11},{wch:7},{wch:20},{wch:10},{wch:14},{wch:13},{wch:13},{wch:28}];
+  ws4['!merges']=[{s:{r:0,c:0},e:{r:0,c:7}}];
+  _xset(ws4,0,0,_XS.titulo);
+  _almStyleTable(ws4,2,r4n,['s','s','s','n','s','m','m','s']);
+  if(salidasR.length)for(let c=0;c<=7;c++)_xset(ws4,3+salidasR.length,c,(c===5||c===6)?_XS.totalRowMonto:_XS.totalRow);
+  XLSX.utils.book_append_sheet(wb,ws4,'Salidas');
+
+  // ══ HOJA 5: Egresos ══
+  const EG_LBL={pendiente:'Pendiente de revisar',validado:'Validado',observado:'Observado'};
+  const h5=['Fecha','Hora','Monto (Bs.)','Descripción','Estado de validación'];
+  const r5=[['Egresos — '+periodo],[],h5];
+  egresosR.forEach(e=>r5.push([_fBo(e.fecha),e.hora||'',e.monto||0,e.descripcion||'',EG_LBL[e.estado||'pendiente']||e.estado]));
+  const r5n=Math.max(egresosR.length,1);
+  if(!egresosR.length)r5.push(['Sin egresos en el período']);
+  else r5.push(['','TOTAL',egrTot,'','']);
+  const ws5=XLSX.utils.aoa_to_sheet(r5);
+  ws5['!cols']=[{wch:11},{wch:7},{wch:13},{wch:40},{wch:22}];
+  ws5['!merges']=[{s:{r:0,c:0},e:{r:0,c:4}}];
+  _xset(ws5,0,0,_XS.titulo);
+  _almStyleTable(ws5,2,r5n,['s','s','m','s','s']);
+  if(egresosR.length)for(let c=0;c<=4;c++)_xset(ws5,3+egresosR.length,c,c===2?_XS.totalRowMonto:_XS.totalRow);
+  XLSX.utils.book_append_sheet(wb,ws5,'Egresos');
+
+  // ══ HOJA 6: Cuadres diarios ══
+  const h6=['Fecha','Hora','Ingresos efectivo (Bs.)','Egresos (Bs.)','Efectivo esperado (Bs.)','Efectivo contado (Bs.)','Diferencia (Bs.)','Nota'];
+  const r6=[['Cuadres diarios (arqueos) — '+periodo],[],h6];
+  cuadresR.forEach(cq=>r6.push([_fBo(cq.fecha),cq.hora||'',cq.ingresosEfectivo||0,cq.egresos||0,cq.esperado||0,cq.contado||0,cq.diferencia||0,cq.nota||'']));
+  if(!cuadresR.length)r6.push(['Sin cuadres registrados en el período']);
+  const ws6=XLSX.utils.aoa_to_sheet(r6);
+  ws6['!cols']=[{wch:11},{wch:7},{wch:18},{wch:14},{wch:18},{wch:18},{wch:14},{wch:28}];
+  ws6['!merges']=[{s:{r:0,c:0},e:{r:0,c:7}}];
+  _xset(ws6,0,0,_XS.titulo);
+  _almStyleTable(ws6,2,Math.max(cuadresR.length,1),['s','s','m','m','m','m','m','s']);
+  XLSX.utils.book_append_sheet(wb,ws6,'Cuadres diarios');
+  return wb;
 }
 
 // ── Buscador global ──────────────────────────────────────────────────────────
