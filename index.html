@@ -189,6 +189,7 @@ tbody tr:hover td{background:var(--bg)}
   .alm-inv-grid{grid-template-columns:1fr 1fr!important}
   .alm-form input,.alm-form select{font-size:16px!important;min-height:50px}
   .alm-big-btn{padding:22px 10px;font-size:18px}
+  #alm-en-list .btn-icon,#alm-sa-list .btn-icon,#alm-eg-list .btn-icon{padding:12px 14px!important;font-size:15px}
 }
 </style>
 </head>
@@ -292,10 +293,13 @@ tbody tr:hover td{background:var(--bg)}
       <div class="field"><label>Tipo</label>
         <select id="edit-tipo">
           <option value="venta">💰 Venta</option>
-          <option value="degustación">🍃 Degustación</option><option value="deuda">⚠️ Deuda</option>
+          <option value="combo">🧺 Combo</option>
+          <option value="entrega-regalia">🎁 Entrega por Regalía</option>
+          <option value="deuda">⚠️ Deuda</option>
           <option value="egreso">💸 Egreso</option><option value="apartado">📌 Apartado</option>
           <option value="otro-ingreso">🪙 Otro Ingreso</option>
           <option value="regalía">🎁 Regalía (histórico)</option>
+          <option value="degustación">🍃 Degustación (histórico)</option>
         </select>
       </div>
       <div class="field"><label>Método de pago</label>
@@ -400,6 +404,58 @@ tbody tr:hover td{background:var(--bg)}
   </div>
 </div>
 
+<div class="overlay" id="almEditMovOverlay" onclick="closeModal('almEditMovOverlay',event)">
+  <div class="modal">
+    <div class="modal-title" id="alm-em-titulo">✏️ Editar movimiento — Mi Almacén</div>
+    <div class="form-row alm-form">
+      <div class="field"><label>Fecha</label><input type="date" id="alm-em-fecha"></div>
+      <div class="field"><label>Producto</label><select id="alm-em-prod"></select></div>
+      <div class="field"><label>Cantidad</label><input type="number" id="alm-em-cant" min="1" inputmode="numeric"></div>
+    </div>
+    <div class="form-row alm-form" id="alm-em-entrada-campos">
+      <div class="field"><label>Origen</label><input type="text" id="alm-em-origen"></div>
+      <div class="field"><label>N° de lote / referencia</label><input type="text" id="alm-em-lote" placeholder="opcional"></div>
+    </div>
+    <div id="alm-em-salida-campos">
+      <div class="form-row alm-form">
+        <div class="field"><label>Tipo de salida</label>
+          <select id="alm-em-tipo">
+            <option value="venta">💰 Venta</option>
+            <option value="regalia">🎁 Regalía</option>
+            <option value="degustacion">🍃 Degustación</option>
+            <option value="merma">🗑 Merma</option>
+            <option value="otro">📦 Otro</option>
+          </select>
+        </div>
+        <div class="field"><label>Efectivo (Bs.)</label><input type="number" id="alm-em-ef" min="0" step="0.01" inputmode="decimal"></div>
+        <div class="field"><label>QR (Bs.)</label><input type="number" id="alm-em-qr" min="0" step="0.01" inputmode="decimal"></div>
+      </div>
+    </div>
+    <div class="field alm-form" style="margin-bottom:14px"><label>Nota</label><input type="text" id="alm-em-nota" placeholder="opcional"></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px">ℹ️ Al guardar, el kardex y los saldos se recalculan automáticamente. El registro quedará marcado como editado (con fecha y hora) para trazabilidad.</div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="almGuardarEditMov()" style="flex:1;justify-content:center">✓ Guardar cambios</button>
+      <button class="btn btn-ghost" onclick="closeModal('almEditMovOverlay')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="almEditEgresoOverlay" onclick="closeModal('almEditEgresoOverlay',event)">
+  <div class="modal">
+    <div class="modal-title">✏️ Editar egreso — Mi Almacén</div>
+    <div class="form-row alm-form">
+      <div class="field"><label>Fecha</label><input type="date" id="alm-ee-fecha"></div>
+      <div class="field"><label>Monto (Bs.)</label><input type="number" id="alm-ee-monto" min="0" step="0.01" inputmode="decimal"></div>
+    </div>
+    <div class="field alm-form" style="margin-bottom:14px"><label>Descripción (obligatoria)</label><input type="text" id="alm-ee-desc"></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px">ℹ️ El egreso quedará marcado como editado. El estado de validación se maneja con los botones Validar / Observar de la lista.</div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="almGuardarEditEgreso()" style="flex:1;justify-content:center">✓ Guardar cambios</button>
+      <button class="btn btn-ghost" onclick="closeModal('almEditEgresoOverlay')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="almAjusteOverlay" onclick="closeModal('almAjusteOverlay',event)">
   <div class="modal">
     <div class="modal-title">⚖️ Ajuste de inventario — Mi Almacén</div>
@@ -448,6 +504,7 @@ tbody tr:hover td{background:var(--bg)}
   <button class="mobile-nav-btn" id="mn-movimientos" onclick="mobileGoTo('movimientos')"><span class="mn-icon">📋</span>Movim.</button>
   <button class="mobile-nav-btn" id="mn-deudas" onclick="mobileGoTo('deudas')"><span class="mn-icon">💳</span>Deudas</button>
   <button class="mobile-nav-btn" id="mn-apartados" onclick="mobileGoTo('apartados')"><span class="mn-icon">📌</span>Apart.</button>
+  <button class="mobile-nav-btn" id="mn-regalias-descontar" onclick="mobileGoTo('regalias-descontar')"><span class="mn-icon">🎁</span>Regalías</button>
   <button class="mobile-nav-btn" id="mn-reportes" onclick="mobileGoTo('reportes')"><span class="mn-icon">📅</span>Reportes</button>
   <button class="mobile-nav-btn" id="mn-mi-almacen" onclick="mobileGoTo('mi-almacen')"><span class="mn-icon">🗄️</span>Almacén</button>
   <button class="mobile-nav-btn" onclick="logout()" style="color:#fff;background:var(--red);border-radius:10px;padding:6px 10px;font-weight:800;min-width:52px"><span class="mn-icon">⏏</span>Salir</button>
@@ -481,8 +538,8 @@ const PRODUCTOS=[
 
 const PINS={admin:'1234',contador:'5678'};
 const ROLES={
-  admin:{label:'🧑‍💼 Administrador',nav:['dashboard','nueva-salida','stock','entrada-stock','movimientos','deudas','apartados','reportes','mi-almacen']},
-  contador:{label:'🧾 Lic. Marcos',nav:['dashboard','nueva-salida','entrada-stock','movimientos','deudas','apartados','reportes']},
+  admin:{label:'🧑‍💼 Administrador',nav:['dashboard','nueva-salida','stock','entrada-stock','movimientos','deudas','apartados','regalias-descontar','reportes','mi-almacen']},
+  contador:{label:'🧾 Lic. Marcos',nav:['dashboard','nueva-salida','entrada-stock','movimientos','deudas','apartados','regalias-descontar','reportes']},
   vista:{label:'👩 Lic. Claudia Lucano',nav:['dashboard','stock','deudas']},
 };
 
@@ -544,8 +601,8 @@ function logout(){
   backToRoles();
 }
 
-const NAV_ITEMS={'dashboard':{icon:'📊',label:'Dashboard',section:'Principal'},'nueva-salida':{icon:'📤',label:'Nueva Salida',section:'Principal'},'stock':{icon:'📦',label:'Stock',section:'Inventario'},'entrada-stock':{icon:'📥',label:'Entrada Stock',section:'Inventario'},'movimientos':{icon:'📋',label:'Movimientos',section:'Registros'},'deudas':{icon:'💳',label:'Deudas',section:'Registros'},'apartados':{icon:'📌',label:'Apartados',section:'Registros'},'reportes':{icon:'📅',label:'Reportes',section:'Registros'},'mi-almacen':{icon:'🗄️',label:'Mi Almacén',section:'Privado'}};
-const PAGE_TITLES={'dashboard':'Dashboard','nueva-salida':'Nueva Salida','stock':'Stock / Inventario','entrada-stock':'Entrada de Mercadería','movimientos':'Movimientos','deudas':'Deudas','apartados':'Productos Apartados','reportes':'Reportes','mi-almacen':'Mi Almacén'};
+const NAV_ITEMS={'dashboard':{icon:'📊',label:'Dashboard',section:'Principal'},'nueva-salida':{icon:'📤',label:'Nueva Salida',section:'Principal'},'stock':{icon:'📦',label:'Stock',section:'Inventario'},'entrada-stock':{icon:'📥',label:'Entrada Stock',section:'Inventario'},'movimientos':{icon:'📋',label:'Movimientos',section:'Registros'},'deudas':{icon:'💳',label:'Deudas',section:'Registros'},'apartados':{icon:'📌',label:'Apartados',section:'Registros'},'regalias-descontar':{icon:'🎁',label:'Regalías por Desc.',section:'Registros'},'reportes':{icon:'📅',label:'Reportes',section:'Registros'},'mi-almacen':{icon:'🗄️',label:'Mi Almacén',section:'Privado'}};
+const PAGE_TITLES={'dashboard':'Dashboard','nueva-salida':'Nueva Salida','stock':'Stock / Inventario','entrada-stock':'Entrada de Mercadería','movimientos':'Movimientos','deudas':'Deudas','apartados':'Productos Apartados','regalias-descontar':'Regalías por Descontar','reportes':'Reportes','mi-almacen':'Mi Almacén'};
 
 function buildNav(){
   const nav=document.getElementById('sidebarNav');
@@ -586,10 +643,21 @@ function borrarDia(fecha){
   });
 }
 
+// Suma/resta unidades al stock dentro de un objeto updates, agregando por producto.
+// Evita que líneas duplicadas del mismo producto (ej. 4 pagadas + 1 regalo) se pisen entre sí.
+function _stockDelta(updates,stock,items,sign){
+  const tot={};
+  (items||[]).forEach(i=>{if(i.prodId)tot[i.prodId]=(tot[i.prodId]||0)+(i.cant||0);});
+  Object.entries(tot).forEach(([pid,c])=>{
+    const base=updates['stock/'+pid]!==undefined?updates['stock/'+pid]:(stock[pid]||0);
+    updates['stock/'+pid]=base+sign*c;
+  });
+}
+
 // Revierte el efecto de un movimiento sobre el stock (para reconstruir stock de días pasados).
 // Cubre también cambios de producto y devoluciones de deuda, que antes se ignoraban.
 function _revertirMovEnStock(stockObj,m){
-  if(['venta','regalía','degustación','deuda','apartado'].includes(m.tipo)){
+  if(['venta','combo','entrega-regalia','regalía','degustación','deuda','apartado'].includes(m.tipo)){
     (m.items||[]).forEach(i=>{if(i.prodId)stockObj[i.prodId]=(stockObj[i.prodId]||0)+(i.cant||0);});
   }else if(m.tipo==='cambio-producto'){
     // El cambio sacó el producto nuevo del stock y devolvió el original: revertir ambos
@@ -645,6 +713,8 @@ function tipoPill(t,metodo){
     if(metodo==='MixtoRegalia')return'<span class="pill pill-amber">🎁 Mixto Regalía</span>';
     return'<span class="pill pill-green">💰 Venta</span>';
   }
+  if(t==='combo')return'<span class="pill pill-blue">🧺 Combo</span>';
+  if(t==='entrega-regalia')return'<span class="pill pill-purple">🎁 Entrega Regalía</span>';
   if(t==='regalía')return'<span class="pill pill-purple">🎁 Regalía</span>';
   if(t==='degustación')return'<span class="pill pill-amber">🍃 Degustación</span>';
   if(t==='deuda')return'<span class="pill pill-red">⚠️ Deuda</span>';
@@ -656,6 +726,14 @@ function tipoPill(t,metodo){
   if(t==='otro-ingreso')return'<span class="pill pill-green">🪙 Otro Ingreso</span>';
   return`<span class="pill pill-gray">${t}</span>`;
 }
+
+// Etiqueta legible del tipo (para CSV, TXT y Excel)
+function tipoLabel(t){
+  const L={venta:'Venta',combo:'Combo','entrega-regalia':'Entrega por Regalía',deuda:'Deuda',apartado:'Apartado',egreso:'Egreso','otro-ingreso':'Otros Ingresos','pago-deuda':'Pago Deuda','regalía':'Regalía','degustación':'Degustación','cambio-producto':'Cambio de producto','devolucion-deuda':'Devolución'};
+  return L[t]||t;
+}
+// Descripción de un ítem del carrito con marca de regalo
+function itemTag(i){return i&&i.esRegalo?' (REGALO)':'';}
 
 function toast(msg){
   const t=document.createElement('div');t.className='toast';t.textContent=msg;
@@ -679,6 +757,7 @@ function renderPage(page){
   if(page==='deudas')renderDeudas();
   if(page==='reportes')renderReportes();
   if(page==='apartados')renderApartados();
+  if(page==='regalias-descontar')renderRegaliasDescontar();
   if(page==='mi-almacen')renderMiAlmacen();
 }
 
@@ -719,14 +798,15 @@ function renderDashboard(fechaVer){
       allEntradas.forEach(e=>{if(e.fecha>hoy&&e.prodId)stockDisplay[e.prodId]=Math.max(0,(stockDisplay[e.prodId]||0)-(e.cant||0));});
     }
     const ventas=movs.filter(m=>m.tipo==='venta');
+    const combosDia=movs.filter(m=>m.tipo==='combo');
+    const entregasReg=movs.filter(m=>m.tipo==='entrega-regalia');
     const apartadosDia=movs.filter(m=>m.tipo==='apartado');
     const regalias=movs.filter(m=>m.tipo==='regalía');
-    const degustaciones=movs.filter(m=>m.tipo==='degustación');
     const egresos=movs.filter(m=>m.tipo==='egreso');
 
-    // Efectivo: suma lo cobrado en efectivo de ventas + apartados + parte efectivo de mixtos
+    // Efectivo: suma lo cobrado en efectivo de ventas + combos + apartados + parte efectivo de mixtos
     let efectivo=0, digital=0;
-    [...ventas,...apartadosDia].forEach(m=>{
+    [...ventas,...combosDia,...apartadosDia].forEach(m=>{
       if(m.metodo==='Efectivo') efectivo+=m.total||0;
       else if(m.metodo==='QR') digital+=m.total||0;
       else if(m.metodo==='MixtoEfectivoQR'){
@@ -737,6 +817,8 @@ function renderDashboard(fechaVer){
         digital+=m.montoQR||0;
       }
     });
+    // Entregas por regalía: solo la diferencia pagada en el momento suma a ingresos
+    entregasReg.forEach(m=>{efectivo+=m.montoEfectivo||0;digital+=m.montoQR||0;});
     const pagosDeudaDia=movs.filter(m=>m.tipo==='pago-deuda');
     pagosDeudaDia.forEach(m=>{
       if(m.metodo==='Efectivo') efectivo+=m.total||0;
@@ -755,9 +837,15 @@ function renderDashboard(fechaVer){
     const efectivoEnCaja=efectivo-totalEgresos;
     const ingresos=efectivo+digital; // solo dinero real
 
-    // Regalías — valor de productos entregados como comisión
+    // Regalías — histórico (tipo regalía) + nuevos flujos: entregas por regalía,
+    // parte regalía de pagos mixtos y unidades marcadas como regalo en ventas/combos
     const totalRegalias=regalias.reduce((s,m)=>s+(m.total||0),0);
     const unidadesRegalias=regalias.reduce((s,m)=>s+(m.items||[]).reduce((a,i)=>a+(i.cant||0),0),0);
+    const aCuentaEntregas=entregasReg.reduce((s,m)=>s+(m.montoRegalia||0),0);
+    const unidadesEntregas=entregasReg.reduce((s,m)=>s+(m.items||[]).reduce((a,i)=>a+(i.cant||0),0),0);
+    const aCuentaMixtos=[...ventas,...combosDia,...apartadosDia].filter(m=>m.metodo==='MixtoRegalia').reduce((s,m)=>s+(m.montoRegalia||0),0);
+    const unidadesRegalo=[...ventas,...combosDia].reduce((s,m)=>s+(m.items||[]).filter(i=>i.esRegalo).reduce((a,i)=>a+(i.cant||0),0),0);
+    const totalACuentaDia=aCuentaEntregas+aCuentaMixtos;
     const porProd={};
     movs.filter(m=>m.tipo!=='pago-deuda'&&m.tipo!=='egreso'&&m.tipo!=='cambio-producto'&&m.tipo!=='devolucion-deuda').forEach(m=>{
       (m.items||(m.prodId?[{prodId:m.prodId,cant:m.cant}]:[])).forEach(item=>{
@@ -780,7 +868,7 @@ function renderDashboard(fechaVer){
         ${isAdmin()?`<button class="btn btn-danger btn-sm" onclick="borrarDia('${hoy}')">🗑 Borrar datos de este día</button>`:''}
       </div>
       <div class="kpi-row">
-        <div class="kpi-card"><div class="kpi-icon">💰</div><div class="kpi-label">${esHoy?'Ingresos hoy':'Ingresos del día'}</div><div class="kpi-val" style="color:var(--teal-dark)">${fmt(ingresos)}</div><div class="kpi-sub">${ventas.length} venta${ventas.length!==1?'s':''}${apartadosDia.length?' + '+apartadosDia.length+' apartado'+(apartadosDia.length!==1?'s':''):''}${pagosDeudaDia.length?' + '+pagosDeudaDia.length+' cobro'+(pagosDeudaDia.length!==1?'s':'')+' de deuda':''}${otrosIngresosDia.length?' + '+otrosIngresosDia.length+' otro'+(otrosIngresosDia.length!==1?'s':'')+' ing.':''}</div></div>
+        <div class="kpi-card"><div class="kpi-icon">💰</div><div class="kpi-label">${esHoy?'Ingresos hoy':'Ingresos del día'}</div><div class="kpi-val" style="color:var(--teal-dark)">${fmt(ingresos)}</div><div class="kpi-sub">${ventas.length} venta${ventas.length!==1?'s':''}${combosDia.length?' + '+combosDia.length+' combo'+(combosDia.length!==1?'s':''):''}${apartadosDia.length?' + '+apartadosDia.length+' apartado'+(apartadosDia.length!==1?'s':''):''}${pagosDeudaDia.length?' + '+pagosDeudaDia.length+' cobro'+(pagosDeudaDia.length!==1?'s':'')+' de deuda':''}${otrosIngresosDia.length?' + '+otrosIngresosDia.length+' otro'+(otrosIngresosDia.length!==1?'s':'')+' ing.':''}${entregasReg.length?' + '+entregasReg.length+' entrega'+(entregasReg.length!==1?'s':'')+' por regalía (solo dif. pagada)':''}</div></div>
         <div class="kpi-card"><div class="kpi-icon">💵</div><div class="kpi-label">Efectivo cobrado</div><div class="kpi-val" style="color:var(--purple)">${fmt(efectivo)}</div><div class="kpi-sub">entrada bruta</div></div>
         <div class="kpi-card"><div class="kpi-icon">🏦</div><div class="kpi-label">${esHoy?'Efectivo en caja':'Efectivo neto'}</div><div class="kpi-val" style="color:var(--teal-dark)">${fmt(efectivoEnCaja)}</div><div class="kpi-sub">efectivo − egresos</div></div>
         <div class="kpi-card"><div class="kpi-icon">📱</div><div class="kpi-label">Cobrado por QR</div><div class="kpi-val" style="color:var(--blue)">${fmt(digital)}</div><div class="kpi-sub">transferencias</div></div>
@@ -788,7 +876,12 @@ function renderDashboard(fechaVer){
         ${apartadosPendientes>0?`<div class="kpi-card" style="cursor:pointer;border-color:var(--amber)" onclick="goTo('apartados')"><div class="kpi-icon">📌</div><div class="kpi-label">Apartados pendientes</div><div class="kpi-val" style="color:var(--amber)">${apartadosPendientes}</div><div class="kpi-sub">pendientes de entrega</div></div>`:''}
         ${isAdmin()&&cambiosHoy>0?`<div class="kpi-card" style="cursor:pointer;border-color:var(--blue)" onclick="verCambiosHoy('${hoy}')"><div class="kpi-icon">🔄</div><div class="kpi-label">Cambios ${esHoy?'hoy':'ese día'}</div><div class="kpi-val" style="color:var(--blue)">${cambiosHoy}</div><div class="kpi-sub">devoluciones y cambios</div></div>`:''}
       </div>
-      ${totalRegalias>0||unidadesRegalias>0?`<div style="background:var(--purple-light);border:1px solid var(--purple-mid);border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div><div style="font-size:11px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px">🎁 Regalías / Comisiones del día</div><div style="font-size:13px;color:var(--text2);font-weight:500">${unidadesRegalias} unidades entregadas — valor Bs. ${totalRegalias.toFixed(2)}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">No afecta caja · Solo descuenta inventario</div></div></div>`:''}
+      ${totalRegalias>0||unidadesRegalias>0||totalACuentaDia>0||unidadesRegalo>0?`<div style="background:var(--purple-light);border:1px solid var(--purple-mid);border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div><div style="font-size:11px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px">🎁 Regalías del día</div>
+        ${totalACuentaDia>0?`<div style="font-size:13px;color:var(--text2);font-weight:600">A cuenta de planilla: Bs. ${totalACuentaDia.toFixed(2)}${aCuentaEntregas>0?' · '+entregasReg.length+' entrega'+(entregasReg.length!==1?'s':'')+' ('+unidadesEntregas+' uds.)':''}${aCuentaMixtos>0?' · pagos mixtos: Bs. '+aCuentaMixtos.toFixed(2):''}</div>`:''}
+        ${unidadesRegalo>0?`<div style="font-size:13px;color:var(--text2);font-weight:500">Regalos en ventas/combos: ${unidadesRegalo} unidad${unidadesRegalo!==1?'es':''} a Bs. 0</div>`:''}
+        ${totalRegalias>0||unidadesRegalias>0?`<div style="font-size:13px;color:var(--text2);font-weight:500">Regalías (histórico): ${unidadesRegalias} unidades — Bs. ${totalRegalias.toFixed(2)}</div>`:''}
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">No suma a ingresos · Solo descuenta inventario · La parte a cuenta va a la planilla del socio</div></div>
+        ${totalACuentaDia>0&&(isAdmin()||canEdit())?`<button class="btn btn-primary btn-sm" onclick="goTo('regalias-descontar')">Ver Regalías por Descontar →</button>`:''}</div>`:''}
       <div class="panel" style="margin-bottom:16px">
         <div class="panel-header"><span class="panel-title">📈 Ingresos — últimos 7 días</span></div>
         <canvas id="ventasChart" height="80"></canvas>
@@ -803,11 +896,12 @@ function renderDashboard(fechaVer){
           ${movsDisplay.length?`<div class="table-wrap"><table><thead><tr><th>Hora</th><th>Socio</th><th>Tipo</th><th>Detalle</th><th>Total</th><th></th></tr></thead><tbody>
           ${movsDisplay.slice(0,20).map(m=>{
             const items=m.items||(m.prodId?[{prodId:m.prodId,cant:m.cant}]:[]);
-            const prodStr=m.tipo==='egreso'?'💸 '+(m.descripcion||m.nota||'Egreso'):m.tipo==='otro-ingreso'?'🪙 '+(m.descripcion||m.nota||'Otro ingreso'):m.tipo==='pago-deuda'?'✅ Pago deuda':items.length?items.map(i=>{const p=getProd(i.prodId);return p?p.emoji+' '+p.nombre+' ×'+i.cant:'—';}).join(', '):'—';
-            const totalColor=m.tipo==='egreso'?'var(--red)':m.tipo==='regalía'?'var(--purple)':'var(--teal-dark)';
+            const prodStr=m.tipo==='egreso'?'💸 '+(m.descripcion||m.nota||'Egreso'):m.tipo==='otro-ingreso'?'🪙 '+(m.descripcion||m.nota||'Otro ingreso'):m.tipo==='pago-deuda'?'✅ Pago deuda':items.length?items.map(i=>{const p=getProd(i.prodId);return p?p.emoji+' '+p.nombre+' ×'+i.cant+itemTag(i):'—';}).join(', '):'—';
+            const totalColor=m.tipo==='egreso'?'var(--red)':(m.tipo==='regalía'||m.tipo==='entrega-regalia')?'var(--purple)':'var(--teal-dark)';
             const totalStr=m.tipo==='egreso'?'-'+fmt(m.monto||m.total||0):fmt(m.total||0);
             let pagoDetalle='';
-            if(m.metodo==='MixtoEfectivoQR'&&(m.montoEfectivo||m.montoQR)) pagoDetalle=`<div style="font-size:10px;color:var(--muted);margin-top:2px">💵 Bs.${(m.montoEfectivo||0).toFixed(0)} + 📱 Bs.${(m.montoQR||0).toFixed(0)}</div>`;
+            if(m.tipo==='entrega-regalia') pagoDetalle=`<div style="font-size:10px;color:var(--muted);margin-top:2px">🎁 Bs.${(m.montoRegalia||0).toFixed(0)} a planilla${(m.montoEfectivo||0)>0?' + 💵 Bs.'+(m.montoEfectivo||0).toFixed(0):''}${(m.montoQR||0)>0?' + 📱 Bs.'+(m.montoQR||0).toFixed(0):''}</div>`;
+            else if(m.metodo==='MixtoEfectivoQR'&&(m.montoEfectivo||m.montoQR)) pagoDetalle=`<div style="font-size:10px;color:var(--muted);margin-top:2px">💵 Bs.${(m.montoEfectivo||0).toFixed(0)} + 📱 Bs.${(m.montoQR||0).toFixed(0)}</div>`;
             else if(m.metodo==='MixtoRegalia'&&(m.montoEfectivo||m.montoQR||m.montoRegalia)) pagoDetalle=`<div style="font-size:10px;color:var(--muted);margin-top:2px">🎁 Bs.${(m.montoRegalia||0).toFixed(0)} + 💵 Bs.${(m.montoEfectivo||0).toFixed(0)} + 📱 Bs.${(m.montoQR||0).toFixed(0)}</div>`;
             return`<tr><td style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);white-space:nowrap">${m.hora}</td><td><div style="font-weight:700;font-size:12px">${m.nombre||'—'}</div><div style="font-size:10px;color:var(--purple);font-family:'JetBrains Mono',monospace">${m.codigo||''}</div></td><td>${tipoPill(m.tipo,m.metodo)}</td><td style="font-size:11px;font-weight:500">${prodStr}</td><td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${totalColor};white-space:nowrap">${totalStr}${pagoDetalle}</td>${isAdmin()?`<td><button class="btn btn-ghost btn-icon" onclick="abrirEdicion('${m._key}')">✏️</button></td>`:'<td></td>'}</tr>`;
           }).join('')}
@@ -849,10 +943,11 @@ function renderNuevaSalida(){
             <div class="field"><label>Tipo de salida</label>
               <select id="ns-tipo" onchange="nsTipoChange()">
                 <option value="venta">💰 Venta</option>
-                <option value="degustación">🍃 Degustación</option>
+                <option value="combo">🧺 Combo</option>
+                <option value="entrega-regalia">🎁 Entrega por Regalía</option>
                 <option value="deuda">⚠️ Deuda / Préstamo</option>
-                <option value="egreso">💸 Egreso / Gasto</option>
                 <option value="apartado">📌 Producto Apartado</option>
+                <option value="egreso">💸 Egreso / Gasto</option>
                 <option value="otro-ingreso">🪙 Otros Ingresos</option>
               </select>
             </div>
@@ -873,6 +968,26 @@ function renderNuevaSalida(){
                 <div class="field"><label id="mixto-label2">Monto QR (Bs.)</label><input type="number" id="ns-qr-monto" placeholder="0" min="0" oninput="calcTotal()"></div>
                 <div class="field" id="mixto-regal-wrap" style="display:none"><label>Monto Regalía (Bs.)</label><input type="number" id="ns-regal-monto" placeholder="0" min="0" oninput="calcTotal()"></div>
               </div>
+            </div>
+          </div>
+          <div id="combo-wrap" style="display:none">
+            <div style="background:var(--blue-light);border:1px solid #bfdbfe;border-radius:10px;padding:12px;margin-bottom:12px">
+              <div style="font-size:11px;font-weight:700;color:var(--blue);text-transform:uppercase;margin-bottom:8px">🧺 Detalle del combo</div>
+              <div class="form-row" style="margin-bottom:0">
+                <div class="field"><label>Precio total del combo (Bs.)</label><input type="number" id="ns-combo-precio" min="0" step="0.01" placeholder="0" oninput="calcTotal()"></div>
+              </div>
+              <div style="font-size:11px;color:var(--muted);margin-top:8px">ℹ️ Los productos del combo se agregan al carrito a Bs. 0 (solo descuentan stock). El total a cobrar es este precio. Indicá en la nota cuál combo es (ej. "Combo 1").</div>
+            </div>
+          </div>
+          <div id="entregareg-wrap" style="display:none">
+            <div style="background:var(--purple-light);border:1px solid var(--purple-mid);border-radius:10px;padding:12px;margin-bottom:12px">
+              <div style="font-size:11px;font-weight:700;color:var(--purple);text-transform:uppercase;margin-bottom:8px">🎁 Entrega por regalía</div>
+              <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Los productos van con su precio normal. El valor queda a cuenta de la regalía del socio (planilla mensual). Si el valor supera su regalía, registrá abajo lo que pagó en el momento.</div>
+              <div class="form-row" style="margin-bottom:0">
+                <div class="field"><label>Diferencia pagada en Efectivo (Bs.)</label><input type="number" id="ns-ereg-ef" min="0" step="0.01" placeholder="0" oninput="calcTotal()"></div>
+                <div class="field"><label>Diferencia pagada en QR (Bs.)</label><input type="number" id="ns-ereg-qr" min="0" step="0.01" placeholder="0" oninput="calcTotal()"></div>
+              </div>
+              <div id="ns-ereg-resumen" style="font-size:12px;font-weight:600;color:var(--purple);margin-top:10px"></div>
             </div>
           </div>
           <div id="egreso-wrap" style="display:none">
@@ -938,15 +1053,22 @@ function nsTipoChange(){
   const mixtoWrap=document.getElementById('mixto-wrap');
   const egresoWrap=document.getElementById('egreso-wrap');
   const otroIngWrap=document.getElementById('otroingreso-wrap');
+  const comboWrap=document.getElementById('combo-wrap');
+  const eregWrap=document.getElementById('entregareg-wrap');
   const carritoPanel=document.getElementById('carrito-prod-panel');
   if(!wrap)return;
   const esEgreso=tipo==='egreso';
   const esOtroIngreso=tipo==='otro-ingreso';
-  const noMetodo=tipo==='degustación'||tipo==='deuda';
+  const esCombo=tipo==='combo';
+  const esEntregaReg=tipo==='entrega-regalia';
+  // Deuda y Entrega por Regalía no usan método de pago (la entrega tiene sus propios campos de diferencia)
+  const noMetodo=tipo==='deuda'||esEntregaReg;
   if(egresoWrap)egresoWrap.style.display=esEgreso?'block':'none';
   if(otroIngWrap)otroIngWrap.style.display=esOtroIngreso?'block':'none';
+  if(comboWrap)comboWrap.style.display=esCombo?'block':'none';
+  if(eregWrap)eregWrap.style.display=esEntregaReg?'block':'none';
   if(carritoPanel)carritoPanel.style.display=(esEgreso||esOtroIngreso)?'none':'block';
-  wrap.style.opacity=noMetodo?'0.4':'1';
+  wrap.style.display=noMetodo?'none':'';
   const metodoSel=document.getElementById('ns-metodo');
   if(metodoSel){
     metodoSel.disabled=noMetodo;
@@ -965,34 +1087,80 @@ function nsTipoChange(){
     if(metodo==='MixtoEfectivoQR'){if(titulo)titulo.textContent='Desglose: Efectivo + QR';if(regalWrap)regalWrap.style.display='none';}
     else if(metodo==='MixtoRegalia'){if(titulo)titulo.textContent='Desglose: Regalía + Efectivo + QR';if(regalWrap)regalWrap.style.display='block';}
   }
+  // En combos los ítems van a Bs. 0 (solo descuentan stock); el precio real es el del combo
+  const precioEl=document.getElementById('ns-precio');
+  if(precioEl){
+    precioEl.disabled=esCombo;
+    if(esCombo)precioEl.value=0;
+  }
   calcTotal();
 }
 
-function nsProdChange(){const p=getProd(document.getElementById('ns-prod')?.value);if(p&&document.getElementById('ns-precio'))document.getElementById('ns-precio').value=p.precio;}
+function nsProdChange(){
+  const p=getProd(document.getElementById('ns-prod')?.value);
+  const precioEl=document.getElementById('ns-precio');
+  if(!precioEl)return;
+  if(document.getElementById('ns-tipo')?.value==='combo'){precioEl.value=0;return;}
+  if(p)precioEl.value=p.precio;
+}
 
 function agregarAlCarrito(){
+  const esCombo=document.getElementById('ns-tipo')?.value==='combo';
   const prodId=document.getElementById('ns-prod').value;
   const cantRaw=document.getElementById('ns-cant').value;
-  const precioRaw=document.getElementById('ns-precio').value;
   const cant=parseInt(cantRaw,10);
-  const precio=parseFloat(precioRaw);
+  const precio=esCombo?0:parseFloat(document.getElementById('ns-precio').value);
   if(!prodId){toast('⚠️ Seleccioná un producto');return;}
   if(!Number.isInteger(cant)||cant<=0){toast('⚠️ La cantidad debe ser un número entero mayor a 0');return;}
-  if(isNaN(precio)||precio<=0){toast('⚠️ El precio debe ser un número positivo');return;}
-  // Misma línea solo si coinciden producto Y precio exacto
-  const existing=carrito.find(i=>i.prodId===prodId&&i.precio===precio);
+  if(!esCombo&&(isNaN(precio)||precio<=0)){toast('⚠️ El precio debe ser un número positivo');return;}
+  // Misma línea solo si coinciden producto, precio exacto y condición de regalo
+  const existing=carrito.find(i=>i.prodId===prodId&&i.precio===precio&&!i.esRegalo);
   if(existing){existing.cant+=cant;existing.subtotal=existing.cant*existing.precio;}
-  else{carrito.push({prodId,cant,precio,subtotal:cant*precio});}
+  else{carrito.push({prodId,cant,precio,subtotal:cant*precio,esRegalo:false});}
   document.getElementById('ns-prod').value='';
   document.getElementById('ns-cant').value=1;
-  document.getElementById('ns-precio').value='';
+  document.getElementById('ns-precio').value=esCombo?0:'';
+  renderCarrito();
+}
+
+// Marca/desmarca un ítem como regalo: pasa a Bs. 0, sigue descontando stock, no suma al total.
+// Si la línea tiene varias unidades, pregunta cuántas son de regalo y divide la línea (ej. promo 4+1).
+function toggleRegalo(idx){
+  const it=carrito[idx];if(!it)return;
+  if(it.esRegalo){
+    it.esRegalo=false;
+    it.subtotal=it.cant*it.precio;
+    // Si existe una línea igual sin regalo, se vuelven a unir
+    const otra=carrito.find((x,i2)=>i2!==idx&&x.prodId===it.prodId&&x.precio===it.precio&&!x.esRegalo);
+    if(otra){otra.cant+=it.cant;otra.subtotal=otra.cant*otra.precio;carrito.splice(idx,1);}
+    renderCarrito();return;
+  }
+  let n=it.cant;
+  if(it.cant>1){
+    const resp=prompt(`De las ${it.cant} unidades, ¿cuántas son de REGALO?`,'1');
+    if(resp===null)return;
+    n=parseInt(resp,10);
+    if(!Number.isInteger(n)||n<=0||n>it.cant){toast('⚠️ Cantidad de regalo inválida');return;}
+  }
+  if(n===it.cant){
+    it.esRegalo=true;it.subtotal=0;
+  }else{
+    it.cant-=n;it.subtotal=it.cant*it.precio;
+    carrito.push({prodId:it.prodId,cant:n,precio:it.precio,subtotal:0,esRegalo:true});
+  }
   renderCarrito();
 }
 
 function renderCarrito(){
   const el=document.getElementById('carrito-items');
   if(!carrito.length){el.innerHTML='<div class="carrito-empty">El carrito está vacío</div>';calcTotal();return;}
-  el.innerHTML=carrito.map((item,i)=>{const p=getProd(item.prodId);return`<div class="carrito-item"><div><div style="font-weight:700;font-size:13px">${p?p.emoji+' '+p.nombre:item.prodId}</div><div style="font-size:12px;color:var(--muted)">${item.cant} unidades × Bs. ${item.precio}</div></div><div style="display:flex;align-items:center;gap:10px"><span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--purple)">${fmt(item.subtotal)}</span><button class="btn btn-danger btn-icon" onclick="quitarDelCarrito(${i})">✕</button></div></div>`;}).join('');
+  el.innerHTML=carrito.map((item,i)=>{
+    const p=getProd(item.prodId);
+    const precioTxt=item.esRegalo
+      ?`<span style="text-decoration:line-through;color:var(--faint)">${item.cant} unidades × Bs. ${item.precio}</span> <span class="pill pill-purple" style="font-size:10px;padding:2px 8px">🎁 REGALO</span>`
+      :`${item.cant} unidades × Bs. ${item.precio}`;
+    return`<div class="carrito-item"><div style="min-width:0"><div style="font-weight:700;font-size:13px">${p?p.emoji+' '+p.nombre:item.prodId}</div><div style="font-size:12px;color:var(--muted)">${precioTxt}</div></div><div style="display:flex;align-items:center;gap:8px;flex-shrink:0"><span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${item.esRegalo?'var(--faint)':'var(--purple)'}">${fmt(item.subtotal)}</span><button class="btn ${item.esRegalo?'btn-primary':'btn-ghost'} btn-icon" title="${item.esRegalo?'Quitar condición de regalo':'Marcar como regalo (Bs. 0, descuenta stock)'}" onclick="toggleRegalo(${i})">🎁</button><button class="btn btn-danger btn-icon" onclick="quitarDelCarrito(${i})">✕</button></div></div>`;
+  }).join('');
   calcTotal();
 }
 
@@ -1001,13 +1169,26 @@ function quitarDelCarrito(i){carrito.splice(i,1);renderCarrito();}
 function calcTotal(){
   const tipo=document.getElementById('ns-tipo')?.value;
   const metodo=document.getElementById('ns-metodo')?.value;
+  // Los regalos ya tienen subtotal 0: el total (y el desglose de pago) se valida sin ellos
   const totalCarrito=carrito.reduce((s,i)=>s+i.subtotal,0);
-  let totalMostrar=tipo==='venta'||tipo==='deuda'||tipo==='apartado'?totalCarrito:0;
+  let totalMostrar=0;
+  if(tipo==='venta'||tipo==='deuda'||tipo==='apartado'||tipo==='entrega-regalia')totalMostrar=totalCarrito;
+  if(tipo==='combo')totalMostrar=parseFloat(document.getElementById('ns-combo-precio')?.value)||0;
   if(tipo==='otro-ingreso')totalMostrar=parseFloat(document.getElementById('ns-otroing-monto')?.value)||0;
   let detalle='';
-  if(tipo==='venta'||tipo==='apartado'||tipo==='otro-ingreso'){
-    if(metodo==='MixtoEfectivoQR'){const efect=parseFloat(document.getElementById('ns-efect-monto')?.value)||0;const qr=parseFloat(document.getElementById('ns-qr-monto')?.value)||0;detalle=`Efectivo: Bs. ${efect.toFixed(2)} + QR: Bs. ${qr.toFixed(2)}`;}
-    else if(metodo==='MixtoRegalia'){const regal=parseFloat(document.getElementById('ns-regal-monto')?.value)||0;const efect=parseFloat(document.getElementById('ns-efect-monto')?.value)||0;const qr=parseFloat(document.getElementById('ns-qr-monto')?.value)||0;detalle=`Regalía: Bs. ${regal.toFixed(2)} + Efectivo: Bs. ${efect.toFixed(2)} + QR: Bs. ${qr.toFixed(2)}`;}
+  const unidsRegalo=carrito.filter(i=>i.esRegalo).reduce((s,i)=>s+i.cant,0);
+  if(unidsRegalo>0)detalle=`🎁 ${unidsRegalo} unidad${unidsRegalo!==1?'es':''} de regalo (no suman)`;
+  if(tipo==='venta'||tipo==='apartado'||tipo==='otro-ingreso'||tipo==='combo'){
+    if(metodo==='MixtoEfectivoQR'){const efect=parseFloat(document.getElementById('ns-efect-monto')?.value)||0;const qr=parseFloat(document.getElementById('ns-qr-monto')?.value)||0;detalle=(detalle?detalle+' · ':'')+`Efectivo: Bs. ${efect.toFixed(2)} + QR: Bs. ${qr.toFixed(2)}`;}
+    else if(metodo==='MixtoRegalia'){const regal=parseFloat(document.getElementById('ns-regal-monto')?.value)||0;const efect=parseFloat(document.getElementById('ns-efect-monto')?.value)||0;const qr=parseFloat(document.getElementById('ns-qr-monto')?.value)||0;detalle=(detalle?detalle+' · ':'')+`Regalía: Bs. ${regal.toFixed(2)} + Efectivo: Bs. ${efect.toFixed(2)} + QR: Bs. ${qr.toFixed(2)}`;}
+  }
+  if(tipo==='entrega-regalia'){
+    const ef=parseFloat(document.getElementById('ns-ereg-ef')?.value)||0;
+    const qr=parseFloat(document.getElementById('ns-ereg-qr')?.value)||0;
+    const aCuenta=Math.max(0,totalCarrito-ef-qr);
+    detalle=(detalle?detalle+' · ':'')+`A cuenta de regalía: ${fmt(aCuenta)}${ef>0?' + Efectivo: '+fmt(ef):''}${qr>0?' + QR: '+fmt(qr):''}`;
+    const resEl=document.getElementById('ns-ereg-resumen');
+    if(resEl)resEl.innerHTML=`A cuenta de regalía: <strong>${fmt(aCuenta)}</strong>${ef+qr>totalCarrito+0.009?' <span style="color:var(--red)">⚠️ Lo pagado supera el valor de los productos</span>':''}`;
   }
   const el=document.getElementById('ns-total');if(el)el.textContent=fmt(totalMostrar);
   const del=document.getElementById('carrito-detalle');if(del)del.textContent=detalle;
@@ -1018,7 +1199,7 @@ function registrarSalida(){
   const codigo=document.getElementById('ns-codigo').value.trim().toUpperCase();
   const tipo=document.getElementById('ns-tipo').value;
   const fechaSalida=document.getElementById('ns-fecha')?.value||todayStr();
-  const metodo=tipo==='venta'||tipo==='apartado'?document.getElementById('ns-metodo').value:tipo==='degustación'?'Gratuito':tipo==='deuda'?'Deuda':'Efectivo';
+  const metodo=(tipo==='venta'||tipo==='apartado'||tipo==='combo')?document.getElementById('ns-metodo').value:tipo==='deuda'?'Deuda':tipo==='entrega-regalia'?'Regalía':'Efectivo';
   const nota=document.getElementById('ns-nota').value.trim();
   if(!fechaSalida){toast('⚠️ Seleccioná una fecha');return;}
   if(tipo==='otro-ingreso'){
@@ -1055,26 +1236,51 @@ function registrarSalida(){
   if(!carrito.length){toast('⚠️ Agregá al menos un producto al carrito');return;}
   db.ref('stock').once('value').then(snap=>{
     const stock=snap.val()||{};
-    for(const item of carrito){if((stock[item.prodId]||0)<item.cant){const p=getProd(item.prodId);toast(`❌ Stock insuficiente de ${p?p.nombre:item.prodId} — quedan ${stock[item.prodId]||0} unidades`);return;}}
-    const total=tipo==='venta'||tipo==='deuda'||tipo==='apartado'?carrito.reduce((s,i)=>s+i.subtotal,0):0;
+    // Sumar cantidades por producto: puede haber líneas duplicadas (ej. 4 normales + 1 regalo)
+    const necesario={};
+    carrito.forEach(i=>{necesario[i.prodId]=(necesario[i.prodId]||0)+i.cant;});
+    for(const pid in necesario){
+      if((stock[pid]||0)<necesario[pid]){const p=getProd(pid);toast(`❌ Stock insuficiente de ${p?p.nombre:pid} — quedan ${stock[pid]||0} unidades y se necesitan ${necesario[pid]}`);return;}
+    }
+    // Total a cobrar según el tipo (los regalos ya valen 0 en el carrito)
+    const totalCarrito=carrito.reduce((s,i)=>s+i.subtotal,0);
+    let total=0;
+    if(tipo==='venta'||tipo==='deuda'||tipo==='apartado')total=totalCarrito;
+    if(tipo==='combo'){
+      total=parseFloat(document.getElementById('ns-combo-precio')?.value)||0;
+      if(total<=0){toast('⚠️ Ingresá el precio total del combo');return;}
+    }
     const now=new Date();
-    // Save mixto breakdown
     let montoEfectivo=0,montoQR=0,montoRegalia=0;
-    if(metodo==='MixtoEfectivoQR'){
+    let notaFinal=nota;
+    if(tipo==='entrega-regalia'){
+      total=totalCarrito;
+      if(total<=0){toast('⚠️ Los productos de la entrega deben tener su precio normal (ese valor va a cuenta de la regalía)');return;}
+      montoEfectivo=parseFloat(document.getElementById('ns-ereg-ef')?.value)||0;
+      montoQR=parseFloat(document.getElementById('ns-ereg-qr')?.value)||0;
+      if(montoEfectivo<0||montoQR<0){toast('⚠️ Los montos pagados no pueden ser negativos');return;}
+      if(montoEfectivo+montoQR>total+0.01){toast('⚠️ La diferencia pagada no puede superar el valor de los productos');return;}
+      montoRegalia=parseFloat((total-montoEfectivo-montoQR).toFixed(2));
+      const desglose=`Total ${fmt(total)} — A cuenta de regalía: ${fmt(montoRegalia)}${montoEfectivo>0?' — Pagado efectivo: '+fmt(montoEfectivo):''}${montoQR>0?' — Pagado QR: '+fmt(montoQR):''}`;
+      notaFinal=nota?nota+' · '+desglose:desglose;
+    }else if(metodo==='MixtoEfectivoQR'){
       montoEfectivo=parseFloat(document.getElementById('ns-efect-monto')?.value)||0;
       montoQR=parseFloat(document.getElementById('ns-qr-monto')?.value)||0;
-      if(Math.abs(montoEfectivo+montoQR-total)>0.01){toast('⚠️ El desglose Efectivo+QR no coincide con el total del carrito');return;}
-    } else if(metodo==='MixtoRegalia'){
+      if(Math.abs(montoEfectivo+montoQR-total)>0.01){toast('⚠️ El desglose Efectivo+QR no coincide con el total a cobrar (los regalos no cuentan)');return;}
+    }else if(metodo==='MixtoRegalia'){
       montoEfectivo=parseFloat(document.getElementById('ns-efect-monto')?.value)||0;
       montoQR=parseFloat(document.getElementById('ns-qr-monto')?.value)||0;
       montoRegalia=parseFloat(document.getElementById('ns-regal-monto')?.value)||0;
-      if(Math.abs(montoEfectivo+montoQR+montoRegalia-total)>0.01){toast('⚠️ El desglose Regalía+Efectivo+QR no coincide con el total del carrito');return;}
+      if(Math.abs(montoEfectivo+montoQR+montoRegalia-total)>0.01){toast('⚠️ El desglose Regalía+Efectivo+QR no coincide con el total a cobrar (los regalos no cuentan)');return;}
     }
-    const mov={fecha:fechaSalida,hora:now.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'}),nombre,codigo,tipo,metodo,total,nota,items:carrito.map(i=>({prodId:i.prodId,cant:i.cant,precio:i.precio,subtotal:i.subtotal})),registradoPor:currentRole,montoEfectivo,montoQR,montoRegalia};
+    // En combos todos los ítems van a Bs. 0 aunque se hayan agregado antes de elegir el tipo
+    const itemsMov=carrito.map(i=>({prodId:i.prodId,cant:i.cant,precio:tipo==='combo'?0:i.precio,subtotal:tipo==='combo'?0:i.subtotal,esRegalo:!!i.esRegalo}));
+    const mov={fecha:fechaSalida,hora:now.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'}),nombre,codigo,tipo,metodo,total,nota:notaFinal,items:itemsMov,registradoPor:currentRole,montoEfectivo,montoQR,montoRegalia};
     const updates={};
     const movKey=db.ref('movimientos').push().key;
     updates['movimientos/'+movKey]=mov;
-    carrito.forEach(item=>{updates['stock/'+item.prodId]=(stock[item.prodId]||0)-item.cant;});
+    // Descuento de stock agregado por producto (evita que líneas duplicadas se pisen entre sí)
+    Object.entries(necesario).forEach(([pid,cant])=>{updates['stock/'+pid]=(stock[pid]||0)-cant;});
     if(tipo==='deuda'){
       const deudaKey=db.ref('deudas').push().key;
       updates['deudas/'+deudaKey]={fecha:fechaSalida,hora:mov.hora,nombre,codigo,items:mov.items,total,saldo:total,nota,estado:'pendiente',registradoPor:currentRole,movId:movKey};
@@ -1083,7 +1289,17 @@ function registrarSalida(){
       const apartKey=db.ref('apartados').push().key;
       updates['apartados/'+apartKey]={fecha:fechaSalida,hora:mov.hora,nombre,codigo,items:mov.items,total,metodo,montoEfectivo,montoQR,montoRegalia,nota,estado:'pendiente',registradoPor:currentRole,movId:movKey};
     }
-    db.ref().update(updates).then(()=>{toast(`✅ Salida registrada — ${fmt(total)}`);carrito=[];renderNuevaSalida();}).catch(()=>toast('❌ Error al guardar la salida'));
+    // Toda regalía usada como pago (entrega o Mixto con Regalía) va a la planilla del socio
+    if(montoRegalia>0.009&&(tipo==='entrega-regalia'||metodo==='MixtoRegalia')){
+      const rpdKey=db.ref('regaliasPorDescontar').push().key;
+      updates['regaliasPorDescontar/'+rpdKey]={fecha:fechaSalida,hora:mov.hora,nombre,codigo,items:mov.items,valorTotal:total,aCuenta:montoRegalia,pagadoEfectivo:montoEfectivo,pagadoQR:montoQR,origen:tipo==='entrega-regalia'?'entrega':'pago-mixto',movId:movKey,estado:'pendiente',registradoPor:currentRole,ts:Date.now()};
+    }
+    db.ref().update(updates).then(()=>{
+      toast(tipo==='entrega-regalia'
+        ?`🎁 Entrega registrada — ${fmt(montoRegalia)} a cuenta de regalía${montoEfectivo+montoQR>0?' + '+fmt(montoEfectivo+montoQR)+' cobrados':''}`
+        :`✅ Salida registrada — ${fmt(total)}`);
+      carrito=[];renderNuevaSalida();
+    }).catch(()=>toast('❌ Error al guardar la salida'));
   });
 }
 
@@ -1254,10 +1470,13 @@ function renderMovimientos(){
         <div class="btn-row">
           <select id="filtro-tipo" onchange="loadMovimientos()" style="font-size:12px;padding:6px 10px;border-radius:8px;width:auto">
             <option value="">Todos</option><option value="venta">Ventas</option>
-            <option value="apartado">Apartados</option><option value="degustación">Degustaciones</option>
+            <option value="combo">Combos</option>
+            <option value="entrega-regalia">Entregas por Regalía</option>
+            <option value="apartado">Apartados</option>
             <option value="deuda">Deudas</option><option value="pago-deuda">Pagos de deuda</option><option value="egreso">Egresos</option>
             <option value="otro-ingreso">Otros Ingresos</option>
             <option value="regalía">Regalías (histórico)</option>
+            <option value="degustación">Degustaciones (histórico)</option>
           </select>
           <input type="date" id="filtro-fecha" value="" onchange="loadMovimientos()" style="font-size:12px;padding:6px 10px;border-radius:8px;width:auto" placeholder="Todas las fechas">
           <input type="text" id="filtro-buscar" placeholder="🔍 Buscar socio o código..." oninput="loadMovimientos()" style="font-size:12px;padding:6px 10px;border-radius:8px;width:180px">
@@ -1286,7 +1505,7 @@ function loadMovimientos(){
     movs.sort((a,b)=>((b.fecha||'')+(b.hora||'')).localeCompare((a.fecha||'')+(a.hora||'')));
     const el=document.getElementById('mov-table');if(!el)return;
     if(!movs.length){el.innerHTML='<div class="empty"><span class="empty-icon">📋</span><p>Sin movimientos.</p></div>';return;}
-    el.innerHTML=`<table><thead><tr><th>Fecha/Hora</th><th>Socio</th><th>Tipo</th><th>Detalle</th><th>Total</th><th>Nota</th>${canEdit()?'<th>Acciones</th>':''}</tr></thead><tbody>${movs.map(m=>{const items=m.items||(m.prodId?[{prodId:m.prodId,cant:m.cant}]:[]);const prodStr=m.tipo==='egreso'?'💸 '+(m.descripcion||m.nota||'Egreso'):m.tipo==='otro-ingreso'?'🪙 '+(m.descripcion||m.nota||'Otro ingreso'):items.length?items.map(i=>{const p=getProd(i.prodId);return p?p.emoji+' '+p.nombre+' ×'+i.cant:'—';}).join(', '):'—';const totalColor=m.tipo==='egreso'?'var(--red)':'var(--teal-dark)';const totalStr=m.tipo==='egreso'?'-'+fmt(m.monto||m.total||0):fmt(m.total||0);const notaEditIcon=m.notaEditada?`<span title="Nota editada por ${m.notaEditPor||'—'} el ${m.notaEditFecha||''} ${m.notaEditHora||''}" style="cursor:help;font-size:11px;margin-right:3px">✏️</span>`:'';return`<tr><td style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;white-space:nowrap">${m.fecha}<br>${m.hora||''}</td><td><div style="font-weight:700">${m.nombre||'—'}</div><div style="font-size:10px;color:var(--purple);font-family:'JetBrains Mono',monospace">${m.codigo||''}</div></td><td>${tipoPill(m.tipo,m.metodo)}${m.modificadoPorCambio?'<div style="font-size:9px;color:var(--amber);margin-top:2px;font-weight:700">✏️ Modificada</div>':''}</td><td style="font-size:12px;font-weight:500">${prodStr}</td><td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${totalColor};white-space:nowrap">${totalStr}</td><td style="font-size:11px;color:var(--muted)">${notaEditIcon}${m.nota||'—'}</td>${canEdit()?`<td><div class="btn-row">${isAdmin()?`<button class="btn btn-ghost btn-icon" onclick="abrirEdicion('${m._key}')">✏️</button><button class="btn btn-danger btn-icon" onclick="eliminarMov('${m._key}')">✕</button>`:`<button class="btn btn-ghost btn-icon" onclick="abrirNotaEdicion('${m._key}')" title="Editar solo la nota / glosa">📝</button>`} ${m.tipo==='venta'?`<button class="btn btn-ghost btn-icon" onclick="abrirCambioProducto('${m._key}')" title="Cambiar producto">🔄</button>`:''}</div></td>`:''}</tr>`;}).join('')}</tbody></table>`;
+    el.innerHTML=`<table><thead><tr><th>Fecha/Hora</th><th>Socio</th><th>Tipo</th><th>Detalle</th><th>Total</th><th>Nota</th>${canEdit()?'<th>Acciones</th>':''}</tr></thead><tbody>${movs.map(m=>{const items=m.items||(m.prodId?[{prodId:m.prodId,cant:m.cant}]:[]);const prodStr=m.tipo==='egreso'?'💸 '+(m.descripcion||m.nota||'Egreso'):m.tipo==='otro-ingreso'?'🪙 '+(m.descripcion||m.nota||'Otro ingreso'):items.length?items.map(i=>{const p=getProd(i.prodId);return p?p.emoji+' '+p.nombre+' ×'+i.cant+itemTag(i):'—';}).join(', '):'—';const totalColor=m.tipo==='egreso'?'var(--red)':'var(--teal-dark)';const totalStr=m.tipo==='egreso'?'-'+fmt(m.monto||m.total||0):fmt(m.total||0);const notaEditIcon=m.notaEditada?`<span title="Nota editada por ${m.notaEditPor||'—'} el ${m.notaEditFecha||''} ${m.notaEditHora||''}" style="cursor:help;font-size:11px;margin-right:3px">✏️</span>`:'';return`<tr><td style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;white-space:nowrap">${m.fecha}<br>${m.hora||''}</td><td><div style="font-weight:700">${m.nombre||'—'}</div><div style="font-size:10px;color:var(--purple);font-family:'JetBrains Mono',monospace">${m.codigo||''}</div></td><td>${tipoPill(m.tipo,m.metodo)}${m.modificadoPorCambio?'<div style="font-size:9px;color:var(--amber);margin-top:2px;font-weight:700">✏️ Modificada</div>':''}</td><td style="font-size:12px;font-weight:500">${prodStr}</td><td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${totalColor};white-space:nowrap">${totalStr}</td><td style="font-size:11px;color:var(--muted)">${notaEditIcon}${m.nota||'—'}</td>${canEdit()?`<td><div class="btn-row">${isAdmin()?`<button class="btn btn-ghost btn-icon" onclick="abrirEdicion('${m._key}')">✏️</button><button class="btn btn-danger btn-icon" onclick="eliminarMov('${m._key}')">✕</button>`:`<button class="btn btn-ghost btn-icon" onclick="abrirNotaEdicion('${m._key}')" title="Editar solo la nota / glosa">📝</button>`} ${m.tipo==='venta'?`<button class="btn btn-ghost btn-icon" onclick="abrirCambioProducto('${m._key}')" title="Cambiar producto">🔄</button>`:''}</div></td>`:''}</tr>`;}).join('')}</tbody></table>`;
   });
 }
 
@@ -1383,7 +1602,7 @@ function guardarNota(){
 
 function eliminarMov(key){
   if(!isAdmin()){toast('❌ Solo el administrador puede eliminar');return;}
-  const reponeTipos=['venta','regalía','degustación','deuda','apartado'];
+  const reponeTipos=['venta','combo','entrega-regalia','regalía','degustación','deuda','apartado'];
   if(!confirm('¿Eliminar este movimiento?'))return;
   db.ref('movimientos/'+key).once('value').then(snap=>{
     const m=snap.val();if(!m)return;
@@ -1394,13 +1613,31 @@ function eliminarMov(key){
     Promise.all([
       db.ref('stock').once('value'),
       esApartado?db.ref('apartados').orderByChild('movId').equalTo(key).once('value'):Promise.resolve(null),
-      esDeuda?db.ref('deudas').orderByChild('movId').equalTo(key).once('value'):Promise.resolve(null)
-    ]).then(([sSnap,aSnap,dSnap])=>{
+      esDeuda?db.ref('deudas').orderByChild('movId').equalTo(key).once('value'):Promise.resolve(null),
+      db.ref('regaliasPorDescontar').orderByChild('movId').equalTo(key).once('value').catch(()=>null)
+    ]).then(([sSnap,aSnap,dSnap,rSnap])=>{
+      // Si el movimiento generó una regalía por descontar, se elimina junto con él
+      const updatesRpd={};
+      if(rSnap)rSnap.forEach(s=>{updatesRpd['regaliasPorDescontar/'+s.key]=null;});
       const stock=sSnap.val()||{};
       const updates={['movimientos/'+key]:null};
-      if(reponeStock) items.forEach(i=>{if(i.prodId)updates['stock/'+i.prodId]=(stock[i.prodId]||0)+i.cant;});
+      if(reponeStock)_stockDelta(updates,stock,items,+1);
+      // Revertir efectos en stock de cambios y devoluciones (antes quedaban sin revertir)
+      if(m.tipo==='cambio-producto'){
+        _stockDelta(updates,stock,items,+1);
+        if(m.itemDevuelto&&m.itemDevuelto.prodId)_stockDelta(updates,stock,[m.itemDevuelto],-1);
+      }
+      if(m.tipo==='devolucion-deuda'){
+        _stockDelta(updates,stock,items,-1);
+        if(m.deudaId){
+          updates['deudas/'+m.deudaId+'/estado']='pendiente';
+          updates['deudas/'+m.deudaId+'/fechaDevolucion']=null;
+          updates['deudas/'+m.deudaId+'/devueltoBy']=null;
+        }
+      }
       if(aSnap)aSnap.forEach(s=>{updates['apartados/'+s.key]=null;});
       if(dSnap)dSnap.forEach(s=>{updates['deudas/'+s.key]=null;});
+      Object.assign(updates,updatesRpd);
       db.ref().update(updates).then(()=>{toast('🗑 Eliminado');loadMovimientos();renderDashboard();}).catch(()=>toast('❌ Error al eliminar'));
     });
   });
@@ -1515,7 +1752,7 @@ function exportMovCSV(){
     let movs=[];snap.forEach(s=>{if(s.val())movs.push(s.val());});
     const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
     let csv='Fecha,Hora,Nombre,Codigo,Tipo,Detalle,Total,Metodo,Nota\n';
-    movs.forEach(m=>{const items=m.items||(m.prodId?[{prodId:m.prodId,cant:m.cant}]:[]);const prodStr=m.tipo==='egreso'?m.descripcion||m.nota||'Egreso':m.tipo==='otro-ingreso'?'OTRO INGRESO: '+(m.descripcion||m.nota||''):items.map(i=>{const p=getProd(i.prodId);return p?p.nombre+' x'+i.cant:'—';}).join(' | ');csv+=`${m.fecha},${m.hora||''},${q(m.nombre)},${q(m.codigo)},${m.tipo==='otro-ingreso'?'Otros Ingresos':m.tipo},${q(prodStr)},${m.total||0},${m.metodo||''},${q(m.nota)}\n`;});
+    movs.forEach(m=>{const items=m.items||(m.prodId?[{prodId:m.prodId,cant:m.cant}]:[]);const prodStr=m.tipo==='egreso'?m.descripcion||m.nota||'Egreso':m.tipo==='otro-ingreso'?'OTRO INGRESO: '+(m.descripcion||m.nota||''):items.map(i=>{const p=getProd(i.prodId);return p?p.nombre+' x'+i.cant+itemTag(i):'—';}).join(' | ');csv+=`${m.fecha},${m.hora||''},${q(m.nombre)},${q(m.codigo)},${tipoLabel(m.tipo)},${q(prodStr)},${m.total||0},${m.metodo||''},${q(m.nota)}\n`;});
     const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='movimientos-nutriwave.csv';a.click();
   });
 }
@@ -1768,7 +2005,7 @@ function eliminarDeuda(key,items,reponerStock){
     }else{
       updates['deudas/'+key]=null;
     }
-    if(reponerStock)(items||[]).forEach(i=>{if(i.prodId)updates['stock/'+i.prodId]=(stock[i.prodId]||0)+i.cant;});
+    if(reponerStock)_stockDelta(updates,stock,items,+1);
     db.ref().update(updates).then(()=>{toast('🗑 Deuda eliminada');loadDeudas();});
   });
 }
@@ -1787,7 +2024,7 @@ function _ejecutarDevolucion(deudaKey){
       updates['deudas/'+deudaKey+'/estado']='devuelta';
       updates['deudas/'+deudaKey+'/fechaDevolucion']=hoy;
       updates['deudas/'+deudaKey+'/devueltoBy']=realizadoPor;
-      items.forEach(i=>{if(i.prodId)updates['stock/'+i.prodId]=(stock[i.prodId]||0)+i.cant;});
+      _stockDelta(updates,stock,items,+1);
       const movKey=db.ref('movimientos').push().key;
       updates['movimientos/'+movKey]={fecha:hoy,hora:nowStr,nombre:d.nombre,codigo:d.codigo||'',tipo:'devolucion-deuda',metodo:'Devolución',total:0,nota:'Devolución de productos: '+items.map(i=>{const p=getProd(i.prodId);return p?p.nombre+' ×'+i.cant:i.prodId;}).join(', '),items,registradoPor:currentRole,realizadoPor,deudaId:deudaKey};
       db.ref().update(updates).then(()=>{toast('↩ Productos devueltos al stock');loadDeudas();}).catch(()=>toast('❌ Error al registrar la devolución'));
@@ -1891,9 +2128,143 @@ function eliminarApartado(key,items){
   db.ref('stock').once('value').then(snap=>{
     const stock=snap.val()||{};
     const updates={['apartados/'+key]:null};
-    (items||[]).forEach(i=>{if(i.prodId)updates['stock/'+i.prodId]=(stock[i.prodId]||0)+i.cant;});
+    _stockDelta(updates,stock,items,+1);
     db.ref().update(updates).then(()=>{toast('🗑 Apartado eliminado');loadApartados();}).catch(()=>toast('❌ Error al eliminar'));
   });
+}
+
+// ── Regalías por Descontar (planilla mensual de líderes) ────────────────────
+// Acumula toda regalía usada como pago: entregas por regalía y la parte regalía
+// de pagos "Mixto con Regalía" (ventas, combos y apartados). Nodo: regaliasPorDescontar.
+let _rpdCache={};
+
+function renderRegaliasDescontar(){
+  const c=document.getElementById('appContent');
+  const mesActual=todayStr().slice(0,7);
+  c.innerHTML=`
+    <div id="rpd-kpis" class="kpi-row" style="margin-bottom:16px"></div>
+    <div class="panel">
+      <div class="panel-header" style="flex-wrap:wrap;gap:10px">
+        <span class="panel-title">🎁 Regalías por Descontar — planilla mensual</span>
+        <div class="btn-row" style="flex-wrap:wrap;gap:6px">
+          <input type="month" id="rpd-mes" value="${mesActual}" onchange="loadRegaliasDescontar()" style="font-size:12px;padding:6px 10px;border-radius:8px;width:auto" title="Filtrar por mes">
+          <select id="rpd-estado" onchange="loadRegaliasDescontar()" style="font-size:12px;padding:6px 10px;border-radius:8px;width:auto">
+            <option value="pendiente">⏳ Pendientes</option>
+            <option value="descontado">✅ Descontadas (historial)</option>
+            <option value="">Todas</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('rpd-mes').value='';loadRegaliasDescontar()">Todos los meses</button>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Acá llega automáticamente toda regalía usada como pago: entregas por regalía y la parte de regalía de los pagos "Mixto con Regalía". Al procesar la planilla del mes, marcá cada entrega (o todo el socio) como descontada.</div>
+      <div id="rpd-list"><div class="loading">⏳ Cargando...</div></div>
+    </div>`;
+  loadRegaliasDescontar();
+}
+
+function loadRegaliasDescontar(){
+  const mes=document.getElementById('rpd-mes')?.value||'';
+  const filtroEstado=document.getElementById('rpd-estado')?document.getElementById('rpd-estado').value:'pendiente';
+  const el=document.getElementById('rpd-list');if(!el)return;
+  el.innerHTML='<div class="loading">⏳ Cargando...</div>';
+  db.ref('regaliasPorDescontar').once('value').then(snap=>{
+    _rpdCache={};
+    let lista=[];
+    snap.forEach(s=>{const v=s.val();if(v){lista.push({...v,_key:s.key});_rpdCache[s.key]={...v,_key:s.key};}});
+    if(mes)lista=lista.filter(r=>(r.fecha||'').slice(0,7)===mes);
+    // KPIs del período (antes del filtro por estado)
+    const pend=lista.filter(r=>(r.estado||'pendiente')!=='descontado');
+    const desc=lista.filter(r=>r.estado==='descontado');
+    const totalPend=pend.reduce((s,r)=>s+(r.aCuenta||0),0);
+    const sociosPend=new Set(pend.map(r=>(r.codigo||'')+'|'+(r.nombre||''))).size;
+    const kpiEl=document.getElementById('rpd-kpis');
+    if(kpiEl)kpiEl.innerHTML=`
+      <div class="kpi-card"><div class="kpi-icon">⏳</div><div class="kpi-label">Pendiente de descontar${mes?' ('+mes+')':''}</div><div class="kpi-val" style="color:var(--amber)">${fmt(totalPend)}</div><div class="kpi-sub">${pend.length} entrega${pend.length!==1?'s':''} · ${sociosPend} socio${sociosPend!==1?'s':''}</div></div>
+      <div class="kpi-card"><div class="kpi-icon">✅</div><div class="kpi-label">Ya descontado${mes?' ('+mes+')':''}</div><div class="kpi-val" style="color:var(--teal-dark)">${fmt(desc.reduce((s,r)=>s+(r.aCuenta||0),0))}</div><div class="kpi-sub">${desc.length} entrega${desc.length!==1?'s':''}</div></div>`;
+    if(filtroEstado)lista=lista.filter(r=>(r.estado||'pendiente')===filtroEstado);
+    const elNow=document.getElementById('rpd-list');if(!elNow)return;
+    if(!lista.length){elNow.innerHTML='<div class="empty"><span class="empty-icon">🎁</span><p>Sin regalías '+(filtroEstado==='pendiente'?'pendientes':filtroEstado==='descontado'?'descontadas':'registradas')+' en este período.</p></div>';return;}
+    // Acumulado por socio
+    const grupos={};
+    lista.forEach(r=>{
+      const k=(r.codigo||'')+'|'+(r.nombre||'—');
+      if(!grupos[k])grupos[k]={nombre:r.nombre||'—',codigo:r.codigo||'',items:[],total:0};
+      grupos[k].items.push(r);
+      grupos[k].total+=(r.aCuenta||0);
+    });
+    elNow.innerHTML=Object.values(grupos).sort((a,b)=>b.total-a.total).map(g=>{
+      const pendG=g.items.filter(r=>(r.estado||'pendiente')!=='descontado');
+      const keysPend=pendG.map(r=>r._key).join(',');
+      const totalPendG=pendG.reduce((s,r)=>s+(r.aCuenta||0),0);
+      const entregasHtml=g.items.sort((a,b)=>((a.fecha||'')+(a.hora||'')).localeCompare((b.fecha||'')+(b.hora||''))).map(r=>{
+        const prodStr=(r.items||[]).map(i=>{const p=getProd(i.prodId);return(p?p.emoji+' '+p.nombre:i.prodId)+' ×'+i.cant+itemTag(i);}).join(', ')||'—';
+        const origenLbl=r.origen==='entrega'?'🎁 Entrega por regalía':'💱 Pago Mixto con Regalía';
+        const esDesc=r.estado==='descontado';
+        const pagado=(r.pagadoEfectivo||0)+(r.pagadoQR||0);
+        return `<div style="padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+          <div style="min-width:0;flex:1">
+            <div style="font-size:12px;font-weight:600">${_fBo(r.fecha)} ${r.hora||''} · ${origenLbl}</div>
+            <div style="font-size:11px;color:var(--muted)">${prodStr}</div>
+            ${pagado>0?`<div style="font-size:11px;color:var(--teal-dark)">Pagado en el momento: ${(r.pagadoEfectivo||0)>0?'💵 '+fmt(r.pagadoEfectivo):''}${(r.pagadoEfectivo||0)>0&&(r.pagadoQR||0)>0?' · ':''}${(r.pagadoQR||0)>0?'📱 '+fmt(r.pagadoQR):''}</div>`:''}
+            ${esDesc?`<div style="font-size:10px;color:var(--teal-dark);font-weight:600">✅ Descontado en planilla el ${_fBo(r.descFecha||'')} ${r.descHora||''} por ${r.descPor||'—'}</div>`:''}
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+            <span style="font-family:'JetBrains Mono',monospace;font-weight:800;color:${esDesc?'var(--teal-dark)':'var(--amber)'}">${fmt(r.aCuenta||0)}</span>
+            ${!esDesc&&canEdit()?`<button class="btn btn-teal btn-sm" onclick="marcarRegDescontada('${r._key}')">✓ Descontado</button>`:''}
+          </div>
+        </div>`;
+      }).join('');
+      return `<div class="deuda-card ${pendG.length?'parcial':'pagada'}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:8px">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span style="font-weight:800;font-size:15px">${g.nombre}</span>
+            <span style="font-size:11px;color:var(--purple);font-family:'JetBrains Mono',monospace;font-weight:700">${g.codigo}</span>
+            ${pendG.length?`<span class="pill pill-amber">⏳ ${pendG.length} pendiente${pendG.length!==1?'s':''}</span>`:'<span class="pill pill-green">✅ Al día</span>'}
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:2px">${pendG.length?'PENDIENTE EN PLANILLA':'TOTAL MOSTRADO'}</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:800;color:${pendG.length?'var(--amber)':'var(--teal-dark)'}">${fmt(pendG.length?totalPendG:g.total)}</div>
+            ${pendG.length>0&&canEdit()?`<button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="marcarSocioDescontado('${keysPend}')">✓ Descontar todo (${pendG.length})</button>`:''}
+          </div>
+        </div>
+        ${entregasHtml}
+      </div>`;
+    }).join('');
+  }).catch(err=>{
+    console.error('Error cargando regalías por descontar:',err);
+    const elErr=document.getElementById('rpd-list');
+    if(elErr)elErr.innerHTML='<div class="empty"><span class="empty-icon">⚠️</span><p>Error al cargar. Revisá la conexión.</p></div>';
+  });
+}
+
+function _rpdMarcar(keys){
+  const now=new Date();
+  const updates={};
+  keys.forEach(k=>{
+    updates['regaliasPorDescontar/'+k+'/estado']='descontado';
+    updates['regaliasPorDescontar/'+k+'/descFecha']=todayStr();
+    updates['regaliasPorDescontar/'+k+'/descHora']=now.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
+    updates['regaliasPorDescontar/'+k+'/descPor']=rolLabel();
+  });
+  return db.ref().update(updates);
+}
+
+function marcarRegDescontada(key){
+  if(!canEdit()){toast('❌ Sin permisos para marcar descuentos');return;}
+  const r=_rpdCache[key];
+  if(!r){toast('❌ Registro no encontrado');return;}
+  if(!confirm(`¿Marcar como descontado en planilla?\n\n${r.nombre||'—'} — ${fmt(r.aCuenta||0)} (${_fBo(r.fecha)})`))return;
+  _rpdMarcar([key]).then(()=>{toast('✅ Marcado como descontado en planilla');loadRegaliasDescontar();}).catch(()=>toast('❌ Error al actualizar'));
+}
+
+function marcarSocioDescontado(keysStr){
+  if(!canEdit()){toast('❌ Sin permisos para marcar descuentos');return;}
+  const keys=keysStr.split(',').filter(Boolean);
+  if(!keys.length)return;
+  const total=keys.reduce((s,k)=>s+((_rpdCache[k]||{}).aCuenta||0),0);
+  const nombre=(_rpdCache[keys[0]]||{}).nombre||'—';
+  if(!confirm(`¿Marcar TODAS las regalías pendientes de ${nombre} como descontadas en planilla?\n\n${keys.length} entrega${keys.length!==1?'s':''} — ${fmt(total)}`))return;
+  _rpdMarcar(keys).then(()=>{toast(`✅ ${keys.length} regalía${keys.length!==1?'s':''} de ${nombre} descontada${keys.length!==1?'s':''}`);loadRegaliasDescontar();}).catch(()=>toast('❌ Error al actualizar'));
 }
 
 let _repMovs=[],_repDeudas=[],_repDesde='',_repHasta='',_repCalc=null;
@@ -1959,19 +2330,28 @@ function generarReporte(){
     _repMovs=[];mSnap.forEach(s=>{const v=s.val();if(v&&v.fecha>=desde&&v.fecha<=hasta)_repMovs.push({...v,_key:s.key});});
     _repDeudas=[];dSnap.forEach(s=>{const v=s.val();if(v&&v.fecha>=desde&&v.fecha<=hasta)_repDeudas.push({...v,_key:s.key});});
     const ventas=_repMovs.filter(m=>m.tipo==='venta');
+    const combosRep=_repMovs.filter(m=>m.tipo==='combo');
+    const entregasRep=_repMovs.filter(m=>m.tipo==='entrega-regalia');
     const apartadosRep=_repMovs.filter(m=>m.tipo==='apartado');
     const regals=_repMovs.filter(m=>m.tipo==='regalía');
     const degus=_repMovs.filter(m=>m.tipo==='degustación');
     const pagosD=_repMovs.filter(m=>m.tipo==='pago-deuda');
     const egresos=_repMovs.filter(m=>m.tipo==='egreso');
-    const totalV=ventas.reduce((s,m)=>s+m.total,0)+apartadosRep.reduce((s,m)=>s+m.total,0);
+    const totalV=ventas.reduce((s,m)=>s+m.total,0)+apartadosRep.reduce((s,m)=>s+m.total,0)+combosRep.reduce((s,m)=>s+(m.total||0),0);
     let efectivo=0,digital=0;
-    [...ventas,...apartadosRep].forEach(m=>{
+    [...ventas,...combosRep,...apartadosRep].forEach(m=>{
       if(m.metodo==='Efectivo') efectivo+=m.total||0;
       else if(m.metodo==='QR') digital+=m.total||0;
       else if(m.metodo==='MixtoEfectivoQR'){efectivo+=m.montoEfectivo||0;digital+=m.montoQR||0;}
       else if(m.metodo==='MixtoRegalia'){efectivo+=m.montoEfectivo||0;digital+=m.montoQR||0;}
     });
+    // Entregas por regalía: solo la diferencia pagada suma a ingresos; el resto va a planilla
+    entregasRep.forEach(m=>{efectivo+=m.montoEfectivo||0;digital+=m.montoQR||0;});
+    const eregACuenta=entregasRep.reduce((s,m)=>s+(m.montoRegalia||0),0);
+    const eregPagado=entregasRep.reduce((s,m)=>s+(m.montoEfectivo||0)+(m.montoQR||0),0);
+    const aCuentaMixtosRep=[...ventas,...combosRep,...apartadosRep].filter(m=>m.metodo==='MixtoRegalia').reduce((s,m)=>s+(m.montoRegalia||0),0);
+    const totalACuentaRep=eregACuenta+aCuentaMixtosRep;
+    const unidsRegaloRep=[...ventas,...combosRep].reduce((s,m)=>s+(m.items||[]).filter(i=>i.esRegalo).reduce((a,i)=>a+(i.cant||0),0),0);
     pagosD.forEach(m=>{
       if(m.metodo==='Efectivo') efectivo+=m.total||0;
       else if(m.metodo==='QR') digital+=m.total||0;
@@ -1989,9 +2369,10 @@ function generarReporte(){
     const unidades=_repMovs.filter(m=>m.tipo!=='pago-deuda'&&m.tipo!=='egreso'&&m.tipo!=='cambio-producto'&&m.tipo!=='devolucion-deuda').reduce((s,m)=>s+(m.items||(m.prodId?[{cant:m.cant}]:[])).reduce((a,i)=>a+(i.cant||0),0),0);
     const dPend=_repDeudas.filter(d=>d.estado!=='pagada'&&d.estado!=='devuelta').reduce((s,d)=>s+(d.saldo||0),0);
     const totalRecibido=efectivo+digital;
-    _repCalc={efectivo,digital,totalV,cobD,totalOtrosIng,totalEgr,dPend,totalRecibido,ventasCount:ventas.length,apartCount:apartadosRep.length,otrosCount:otrosIng.length,pagosCount:pagosD.length};
+    _repCalc={efectivo,digital,totalV,cobD,totalOtrosIng,totalEgr,dPend,totalRecibido,ventasCount:ventas.length,apartCount:apartadosRep.length,otrosCount:otrosIng.length,pagosCount:pagosD.length,combosCount:combosRep.length,eregCount:entregasRep.length,eregACuenta,eregPagado,aCuentaMixtos:aCuentaMixtosRep,totalACuenta:totalACuentaRep,unidsRegalo:unidsRegaloRep};
     document.getElementById('rep-kpis').innerHTML=`
-      <div class="kpi-card"><div class="kpi-icon">💰</div><div class="kpi-label">Ingresos por ventas</div><div class="kpi-val" style="color:var(--teal-dark)">${fmt(totalV)}</div><div class="kpi-sub">${ventas.length} ventas${apartadosRep.length?' + '+apartadosRep.length+' apart.':''} · sin deudas ni otros</div></div>
+      <div class="kpi-card"><div class="kpi-icon">💰</div><div class="kpi-label">Ingresos por ventas</div><div class="kpi-val" style="color:var(--teal-dark)">${fmt(totalV)}</div><div class="kpi-sub">${ventas.length} ventas${combosRep.length?' + '+combosRep.length+' combos':''}${apartadosRep.length?' + '+apartadosRep.length+' apart.':''} · sin deudas ni otros</div></div>
+      ${totalACuentaRep>0?`<div class="kpi-card" style="border-color:var(--purple-mid)"><div class="kpi-icon">🎁</div><div class="kpi-label">A cuenta de regalía</div><div class="kpi-val" style="color:var(--purple)">${fmt(totalACuentaRep)}</div><div class="kpi-sub">${entregasRep.length?entregasRep.length+' entrega'+(entregasRep.length!==1?'s':''):''}${entregasRep.length&&aCuentaMixtosRep>0?' + ':''}${aCuentaMixtosRep>0?'pagos mixtos '+fmt(aCuentaMixtosRep):''} · va a planilla, no a ingresos</div></div>`:''}
       <div class="kpi-card"><div class="kpi-icon">✅</div><div class="kpi-label">Cobro deudas</div><div class="kpi-val" style="color:var(--teal-dark)">${fmt(cobD)}</div><div class="kpi-sub">${pagosD.length} pago${pagosD.length!==1?'s':''} recibido${pagosD.length!==1?'s':''}</div></div>
       ${otrosIng.length?`<div class="kpi-card"><div class="kpi-icon">🪙</div><div class="kpi-label">Otros ingresos</div><div class="kpi-val" style="color:var(--teal-dark)">${fmt(totalOtrosIng)}</div><div class="kpi-sub">${otrosIng.length} registro${otrosIng.length!==1?'s':''}</div></div>`:''}
       <div class="kpi-card" style="border-color:var(--teal)"><div class="kpi-icon">🏦</div><div class="kpi-label">Total dinero recibido</div><div class="kpi-val" style="color:var(--teal-dark)">${fmt(totalRecibido)}</div><div class="kpi-sub">efectivo + QR (todo incluido)</div></div>
@@ -2007,17 +2388,19 @@ function generarReporte(){
         if(!i.prodId)return;
         if(!porProd[i.prodId])porProd[i.prodId]={cant:0,ventas:0};
         porProd[i.prodId].cant+=i.cant;
-        if(m.tipo==='venta'||m.tipo==='apartado')porProd[i.prodId].ventas+=(i.subtotal||i.cant*i.precio||0);
+        // Los ítems regalo no suman ingresos (subtotal 0); ojo: no usar || porque 0 es falsy
+        if((m.tipo==='venta'||m.tipo==='apartado'||m.tipo==='combo')&&!i.esRegalo)porProd[i.prodId].ventas+=(i.subtotal!=null?i.subtotal:(i.cant*i.precio)||0);
       });
     });
     const sumPorProd=Object.values(porProd).reduce((s,d)=>s+d.ventas,0);
     const notaDescuento=Math.abs(sumPorProd-totalV)>0.02?`<div style="font-size:11px;color:var(--amber);padding:10px 0 0;font-weight:600">ℹ️ El desglose por producto suma ${fmt(sumPorProd)} (precios de lista). Los ingresos reales fueron ${fmt(totalV)} porque algunas ventas tuvieron descuento.</div>`:'';
     document.getElementById('rep-prods').innerHTML=(Object.entries(porProd).sort((a,b)=>b[1].ventas-a[1].ventas).map(([id,d])=>{const p=getProd(id);return`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)"><span style="font-weight:600;font-size:13px">${p?p.emoji+' '+p.nombre:id}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px"><span style="color:var(--muted)">${d.cant} unidades &nbsp;</span><span style="color:var(--teal-dark);font-weight:700">${fmt(d.ventas)}</span></span></div>`;}).join('')||'<div class="empty"><p>Sin datos.</p></div>')+notaDescuento;
-    const porMet={};[...ventas,...apartadosRep].forEach(m=>{porMet[m.metodo]=(porMet[m.metodo]||0)+(m.total||0);});
+    const porMet={};[...ventas,...combosRep,...apartadosRep].forEach(m=>{porMet[m.metodo]=(porMet[m.metodo]||0)+(m.total||0);});
     document.getElementById('rep-metodos').innerHTML=Object.entries(porMet).map(([met,tot])=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)"><span style="font-weight:600;font-size:13px">${met}</span><span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--teal-dark)">${fmt(tot)}</span></div>`).join('')||'<div class="empty"><p>Sin datos.</p></div>';
     const totalSoloVentas=ventas.reduce((s,m)=>s+m.total,0);
+    const totalSoloCombos=combosRep.reduce((s,m)=>s+(m.total||0),0);
     const totalSoloApartados=apartadosRep.reduce((s,m)=>s+m.total,0);
-    document.getElementById('rep-tipos').innerHTML=[['venta',ventas,totalSoloVentas],['apartado',apartadosRep,totalSoloApartados],['otro-ingreso',otrosIng,totalOtrosIng],['regalía',regals,0],['degustación',degus,0],['egreso',egresos,totalEgr]].map(([t,arr,tot])=>{const c2=arr.reduce((s,m)=>s+(m.items||(m.prodId?[{cant:m.cant}]:[])).reduce((a,i)=>a+(i.cant||0),0),0);return`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">${tipoPill(t,'Efectivo')}<span style="font-family:'JetBrains Mono',monospace;font-size:12px"><span style="color:var(--muted)">${t==='egreso'||t==='otro-ingreso'?arr.length+' registro'+(arr.length!==1?'s':''):c2+' unidades'} &nbsp;</span>${tot>0?`<span style="color:${t==='egreso'?'var(--red)':'var(--teal-dark)'};font-weight:700">${t==='egreso'?'-':'+'}${fmt(tot)}</span>`:''}</span></div>`;}).join('');
+    document.getElementById('rep-tipos').innerHTML=[['venta',ventas,totalSoloVentas],['combo',combosRep,totalSoloCombos],['entrega-regalia',entregasRep,eregPagado],['apartado',apartadosRep,totalSoloApartados],['otro-ingreso',otrosIng,totalOtrosIng],['regalía',regals,0],['degustación',degus,0],['egreso',egresos,totalEgr]].map(([t,arr,tot])=>{if(!arr.length&&(t==='regalía'||t==='degustación'||t==='combo'||t==='entrega-regalia'))return'';const c2=arr.reduce((s,m)=>s+(m.items||(m.prodId?[{cant:m.cant}]:[])).reduce((a,i)=>a+(i.cant||0),0),0);const extra=t==='entrega-regalia'&&eregACuenta>0?`<div style="font-size:10px;color:var(--purple);text-align:right">🎁 ${fmt(eregACuenta)} a cuenta de planilla</div>`:'';return`<div style="padding:10px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;align-items:center">${tipoPill(t,'Efectivo')}<span style="font-family:'JetBrains Mono',monospace;font-size:12px"><span style="color:var(--muted)">${t==='egreso'||t==='otro-ingreso'?arr.length+' registro'+(arr.length!==1?'s':''):c2+' unidades'} &nbsp;</span>${tot>0?`<span style="color:${t==='egreso'?'var(--red)':'var(--teal-dark)'};font-weight:700">${t==='egreso'?'-':'+'}${fmt(tot)}</span>`:''}</span></div>${extra}</div>`;}).join('')+(unidsRegaloRep>0?`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0"><span class="pill pill-purple">🎁 Regalos en ventas/combos</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted)">${unidsRegaloRep} unidades a Bs. 0</span></div>`:'');
     document.getElementById('rep-deudas').innerHTML=_repDeudas.length?_repDeudas.map(d=>{const items=d.items||(d.prodId?[{prodId:d.prodId,cant:d.cant}]:[]);const prodStr=items.map(i=>{const p=getProd(i.prodId);return p?p.nombre:'—';}).join(', ');return`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)"><div><span style="font-weight:700">${d.nombre}</span> <span style="font-size:11px;color:var(--muted)">${d.codigo}</span><div style="font-size:11px;color:var(--muted)">${prodStr}</div></div><span>${d.estado==='pagada'?'<span class="pill pill-green">✅ Pagada</span>':d.estado==='parcial'?`<span class="pill pill-amber">Saldo: ${fmt(d.saldo)}</span>`:`<span class="pill pill-red">${fmt(d.saldo)}</span>`}</span></div>`;}).join(''):'<div class="empty"><p>Sin deudas.</p></div>';
     document.getElementById('rep-resultado').style.display='block';
   });
@@ -2027,7 +2410,7 @@ function exportExcel(){
   if(!_repMovs.length&&!_repDeudas.length){toast('⚠️ Generá un reporte primero');return;}
   const wb=XLSX.utils.book_new();
   const movRows=[['Fecha','Hora','Nombre','Código','Tipo','Detalle','Total','Método','Nota']];
-  _repMovs.forEach(m=>{const items=m.items||(m.prodId?[{prodId:m.prodId,cant:m.cant}]:[]);const prodStr=m.tipo==='egreso'?m.descripcion||m.nota||'Egreso':m.tipo==='otro-ingreso'?'OTRO INGRESO: '+(m.descripcion||m.nota||''):items.map(i=>{const p=getProd(i.prodId);return p?p.nombre+' x'+i.cant:'—';}).join(' | ');movRows.push([m.fecha,m.hora||'',m.nombre||'',m.codigo||'',m.tipo==='otro-ingreso'?'Otros Ingresos':m.tipo,prodStr,m.total||0,m.metodo||'',m.nota||'']);});
+  _repMovs.forEach(m=>{const items=m.items||(m.prodId?[{prodId:m.prodId,cant:m.cant}]:[]);const prodStr=m.tipo==='egreso'?m.descripcion||m.nota||'Egreso':m.tipo==='otro-ingreso'?'OTRO INGRESO: '+(m.descripcion||m.nota||''):items.map(i=>{const p=getProd(i.prodId);return p?p.nombre+' x'+i.cant+itemTag(i):'—';}).join(' | ');movRows.push([m.fecha,m.hora||'',m.nombre||'',m.codigo||'',tipoLabel(m.tipo),prodStr,m.total||0,m.metodo||'',m.nota||'']);});
   const ws1=XLSX.utils.aoa_to_sheet(movRows);ws1['!cols']=[10,8,18,10,12,30,12,14,20].map(w=>({wch:w}));
   XLSX.utils.book_append_sheet(wb,ws1,'Movimientos');
   // Usa exactamente los mismos valores calculados que muestra el reporte en pantalla
@@ -2046,6 +2429,9 @@ function exportExcel(){
     ['Total egresos',rc.totalEgr],
     ['Efectivo neto (efectivo − egresos)',rc.efectivo-rc.totalEgr],
     ['Deudas pendientes generadas en el período',rc.dPend],
+    ...(rc.totalACuenta?[[`Regalías a cuenta de planilla — NO son ingresos (${rc.eregCount||0} entrega${(rc.eregCount||0)!==1?'s':''}${rc.aCuentaMixtos>0?' + pagos Mixto con Regalía':''})`,rc.totalACuenta]]:[]),
+    ...(rc.eregPagado?[['Diferencias pagadas en entregas por regalía (ya incluidas en ingresos)',rc.eregPagado]]:[]),
+    ...(rc.unidsRegalo?[['Unidades regaladas en ventas/combos (a Bs. 0, solo salida de stock)',rc.unidsRegalo]]:[]),
     [],
     [' DEUDAS'],
     ['Nombre','Código','Productos','Total','Saldo','Estado'],
@@ -2064,8 +2450,10 @@ function exportTXT(){
   if(rcT.otrosCount)txt+=`Otros ingresos:                  Bs. ${rcT.totalOtrosIng.toFixed(2)}\n`;
   txt+=`TOTAL DINERO RECIBIDO:           Bs. ${rcT.totalRecibido.toFixed(2)}  (Efectivo: Bs. ${rcT.efectivo.toFixed(2)} + QR: Bs. ${rcT.digital.toFixed(2)})\n`;
   txt+=`Egresos:                         Bs. ${rcT.totalEgr.toFixed(2)}\n`;
-  txt+=`Efectivo neto:                   Bs. ${(rcT.efectivo-rcT.totalEgr).toFixed(2)}\n\n`;
-  _repMovs.forEach(m=>{const items=m.items||(m.prodId?[{prodId:m.prodId,cant:m.cant}]:[]);const prodStr=m.tipo==='egreso'?m.descripcion||m.nota||'Egreso':m.tipo==='otro-ingreso'?'OTRO INGRESO: '+(m.descripcion||m.nota||''):items.map(i=>{const p=getProd(i.prodId);return p?p.nombre+' x'+i.cant:'—';}).join(', ');txt+=`${m.fecha} ${m.hora||''} | ${m.nombre||''} (${m.codigo||''}) | ${m.tipo==='otro-ingreso'?'Otros Ingresos':m.tipo} | ${prodStr} | Bs. ${(m.total||0).toFixed(2)} | ${m.metodo||''}\n`;});
+  txt+=`Efectivo neto:                   Bs. ${(rcT.efectivo-rcT.totalEgr).toFixed(2)}\n`;
+  if(rcT.totalACuenta)txt+=`Regalías a cuenta de planilla:   Bs. ${rcT.totalACuenta.toFixed(2)}  (no son ingresos)\n`;
+  txt+='\n';
+  _repMovs.forEach(m=>{const items=m.items||(m.prodId?[{prodId:m.prodId,cant:m.cant}]:[]);const prodStr=m.tipo==='egreso'?m.descripcion||m.nota||'Egreso':m.tipo==='otro-ingreso'?'OTRO INGRESO: '+(m.descripcion||m.nota||''):items.map(i=>{const p=getProd(i.prodId);return p?p.nombre+' x'+i.cant+itemTag(i):'—';}).join(', ');txt+=`${m.fecha} ${m.hora||''} | ${m.nombre||''} (${m.codigo||''}) | ${tipoLabel(m.tipo)} | ${prodStr} | Bs. ${(m.total||0).toFixed(2)} | ${m.metodo||''}\n`;});
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));a.download=`nutriwave-${_repDesde}-${_repHasta}.txt`;a.click();
 }
 
@@ -2133,6 +2521,8 @@ function _buildReporteDia(fecha){
 
     // ── KPIs (misma lógica que el dashboard) ──
     const ventas=movs.filter(m=>m.tipo==='venta');
+    const combosDia=movs.filter(m=>m.tipo==='combo');
+    const entregasDia=movs.filter(m=>m.tipo==='entrega-regalia');
     const apartadosDia=movs.filter(m=>m.tipo==='apartado');
     const regalias=movs.filter(m=>m.tipo==='regalía');
     const egresos=movs.filter(m=>m.tipo==='egreso');
@@ -2140,11 +2530,16 @@ function _buildReporteDia(fecha){
     const otros=movs.filter(m=>m.tipo==='otro-ingreso');
     const deudasNuevas=movs.filter(m=>m.tipo==='deuda');
     let efectivo=0,digital=0;
-    [...ventas,...apartadosDia,...pagosDeuda,...otros].forEach(m=>{
+    [...ventas,...combosDia,...apartadosDia,...pagosDeuda,...otros].forEach(m=>{
       if(m.metodo==='Efectivo')efectivo+=m.total||0;
       else if(m.metodo==='QR')digital+=m.total||0;
       else if(m.metodo==='MixtoEfectivoQR'||m.metodo==='MixtoRegalia'){efectivo+=m.montoEfectivo||0;digital+=m.montoQR||0;}
     });
+    // Entregas por regalía: solo la diferencia pagada en el momento suma a caja
+    entregasDia.forEach(m=>{efectivo+=m.montoEfectivo||0;digital+=m.montoQR||0;});
+    const aCuentaEntregasDia=entregasDia.reduce((s,m)=>s+(m.montoRegalia||0),0);
+    const aCuentaMixtosDia=[...ventas,...combosDia,...apartadosDia].filter(m=>m.metodo==='MixtoRegalia').reduce((s,m)=>s+(m.montoRegalia||0),0);
+    const unidsRegaloDia=[...ventas,...combosDia].reduce((s,m)=>s+(m.items||[]).filter(i=>i.esRegalo).reduce((a,i)=>a+(i.cant||0),0),0);
     const totalEgresos=egresos.reduce((s,m)=>s+(m.monto||m.total||0),0);
     const efectivoCaja=efectivo-totalEgresos;
     const ingresos=efectivo+digital;
@@ -2176,9 +2571,12 @@ function _buildReporteDia(fecha){
       ...(otros.length?[['Otros ingresos ('+otros.length+' registro'+(otros.length!==1?'s':'')+')',totalOtros,'m']]:[]),
       ['Regalías entregadas (unidades)',unidadesRegalias,'n'],
       ['Valor total de regalías entregadas',totalRegalias,'m'],
+      ...(entregasDia.length?[['Entregas por regalía — a cuenta de planilla ('+entregasDia.length+')',aCuentaEntregasDia,'m'],['Entregas por regalía — diferencia pagada (incluida en ingresos)',entregasDia.reduce((s,m)=>s+(m.montoEfectivo||0)+(m.montoQR||0),0),'m']]:[]),
+      ...(aCuentaMixtosDia>0?[['Regalía usada en pagos "Mixto con Regalía" (a planilla, no es ingreso)',aCuentaMixtosDia,'m']]:[]),
+      ...(unidsRegaloDia>0?[['Unidades regaladas en ventas/combos (a Bs. 0)',unidsRegaloDia,'n']]:[]),
       ['Deudas nuevas registradas ('+deudasNuevas.length+')',totalDeudasNuevas,'m'],
       ['Deudas cobradas hoy ('+pagosDeuda.length+' pago'+(pagosDeuda.length!==1?'s':'')+')',totalCobradoDeudas,'m'],
-      ['Cantidad de ventas realizadas',ventas.length,'n'],
+      ['Cantidad de ventas realizadas'+(combosDia.length?' (+ '+combosDia.length+' combo'+(combosDia.length!==1?'s':'')+')':''),ventas.length,'n'],
       ['Apartados pendientes de entrega (total sistema)',apartPend,'n'],
     ];
     indicadores.forEach(i=>r1.push([i[0],i[1]]));
@@ -2217,11 +2615,12 @@ function _buildReporteDia(fecha){
     XLSX.utils.book_append_sheet(wb,ws1,'Resumen del día');
 
     // ══ HOJA 2: Detalle de movimientos ══
-    const TIPO_LBL={venta:'Venta','regalía':'Regalía','degustación':'Degustación',deuda:'Deuda','pago-deuda':'Pago Deuda',egreso:'Egreso',apartado:'Apartado','otro-ingreso':'Otros Ingresos','cambio-producto':'Cambio de producto','devolucion-deuda':'Devolución'};
+    const TIPO_LBL={venta:'Venta',combo:'Combo','entrega-regalia':'Entrega por Regalía','regalía':'Regalía','degustación':'Degustación',deuda:'Deuda','pago-deuda':'Pago Deuda',egreso:'Egreso',apartado:'Apartado','otro-ingreso':'Otros Ingresos','cambio-producto':'Cambio de producto','devolucion-deuda':'Devolución'};
     const ROL_LBL={admin:'Administrador',contador:'Lic. Marcos',vista:'Vista'};
     const cap=s=>s?s.charAt(0).toUpperCase()+s.slice(1):s;
     const estadoDe=m=>{
-      if(m.tipo==='venta')return m.modificadoPorCambio?'Pagada (modificada)':'Pagada';
+      if(m.tipo==='venta'||m.tipo==='combo')return m.modificadoPorCambio?'Pagada (modificada)':'Pagada';
+      if(m.tipo==='entrega-regalia')return'A cuenta de regalía (planilla)';
       if(m.tipo==='deuda')return cap((deudasByMov[m._key]||{}).estado||'pendiente');
       if(m.tipo==='apartado'){const a=apartByMov[m._key];return a?(a.estado==='pendiente'?'Pendiente de entrega':'Entregado'):'—';}
       if(m.tipo==='pago-deuda'||m.tipo==='otro-ingreso')return'Cobrado';
@@ -2234,14 +2633,14 @@ function _buildReporteDia(fecha){
     let sumEf=0,sumQr=0,sumReg=0;
     movs.forEach((m,i)=>{
       let ef=0,qr=0,reg=0;
-      if(['venta','apartado','pago-deuda','otro-ingreso'].includes(m.tipo)){
+      if(['venta','combo','apartado','pago-deuda','otro-ingreso','entrega-regalia'].includes(m.tipo)){
         if(m.metodo==='Efectivo')ef=m.total||0;
         else if(m.metodo==='QR')qr=m.total||0;
         else{ef=m.montoEfectivo||0;qr=m.montoQR||0;reg=m.montoRegalia||0;}
       }else if(m.tipo==='egreso'){ef=-(m.monto||m.total||0);}
       sumEf+=ef;sumQr+=qr;sumReg+=reg;
       const items=m.items||(m.prodId?[{prodId:m.prodId,cant:m.cant}]:[]);
-      const prods=m.tipo==='egreso'||m.tipo==='otro-ingreso'?(m.descripcion||m.nota||'—'):items.map(it=>{const p=getProd(it.prodId);return(p?p.nombre:it.prodId)+' x'+(it.cant||0);}).join(', ')||'—';
+      const prods=m.tipo==='egreso'||m.tipo==='otro-ingreso'?(m.descripcion||m.nota||'—'):items.map(it=>{const p=getProd(it.prodId);return(p?p.nombre:it.prodId)+' x'+(it.cant||0)+itemTag(it);}).join(', ')||'—';
       const totalMov=m.tipo==='egreso'?-(m.monto||m.total||0):(m.total||0);
       r2.push([i+1,m.hora||'',TIPO_LBL[m.tipo]||m.tipo,m.nombre||'—',m.codigo||'',prods,m.metodo||'—',ef,qr,reg,totalMov,estadoDe(m),m.nota||'',ROL_LBL[m.registradoPor]||m.registradoPor||'—']);
     });
@@ -2272,8 +2671,16 @@ function _buildReporteDia(fecha){
       allEntradas.forEach(e=>{if(e.fecha>fecha&&e.prodId)stockCierre[e.prodId]=Math.max(0,(stockCierre[e.prodId]||0)-(e.cant||0));});
     }
     const unitsBy=tipos=>{const map={};movs.filter(m=>tipos.includes(m.tipo)).forEach(m=>{(m.items||[]).forEach(i=>{if(i.prodId)map[i.prodId]=(map[i.prodId]||0)+(i.cant||0);});});return map;};
-    const uVend=unitsBy(['venta','apartado']);
-    const uRegal=unitsBy(['regalía']);
+    // Vendidas: ventas, combos y apartados sin los ítems regalo.
+    // Regaladas: regalías históricas + entregas por regalía + ítems regalo de ventas/combos.
+    const uVend={},uRegal={};
+    movs.forEach(m=>{
+      if(['venta','combo','apartado'].includes(m.tipo)){
+        (m.items||[]).forEach(i=>{if(!i.prodId)return;const dest=i.esRegalo?uRegal:uVend;dest[i.prodId]=(dest[i.prodId]||0)+(i.cant||0);});
+      }else if(m.tipo==='regalía'||m.tipo==='entrega-regalia'){
+        (m.items||[]).forEach(i=>{if(i.prodId)uRegal[i.prodId]=(uRegal[i.prodId]||0)+(i.cant||0);});
+      }
+    });
     const uDegu=unitsBy(['degustación']);
     const uDeuda=unitsBy(['deuda']);
     const uEntr={};entradasDia.forEach(e=>{if(e.prodId)uEntr[e.prodId]=(uEntr[e.prodId]||0)+(e.cant||0);});
@@ -2504,15 +2911,24 @@ function almGuardarAjuste(){
 }
 
 // ── Entradas (producción → almacén) ──────────────────────────────────────────
+function _almEditadoTag(x){
+  if(!x.editado)return'';
+  return `<span title="Editado el ${_fBo(x.editadoFecha||'')} ${x.editadoHora||''}" style="color:var(--amber);font-size:10px;font-weight:700;cursor:help;white-space:nowrap">✎ editado</span>`;
+}
+
 function _almEntradasListHtml(){
   const lista=_almMovs.filter(m=>m.tipo==='entrada'||m.tipo==='inicial').slice().reverse().slice(0,15);
   if(!lista.length)return '<div class="empty"><span class="empty-icon">📥</span><p>Sin entradas registradas.</p></div>';
   return lista.map(m=>{
     const p=getProd(m.prodId);
-    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--border)">
-      <div style="min-width:0"><div style="font-weight:700;font-size:13px">${p?p.emoji+' '+p.nombre:m.prodId}</div>
+    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
+      <div style="min-width:0;flex:1"><div style="font-weight:700;font-size:13px">${p?p.emoji+' '+p.nombre:m.prodId} ${_almEditadoTag(m)}</div>
       <div style="font-size:11px;color:var(--muted)">${_fBo(m.fecha)} ${m.hora||''}${m.origen?' · '+m.origen:m.tipo==='inicial'?' · Inventario inicial':''}${m.lote?' · Lote '+m.lote:''}${m.nota?' · '+m.nota:''}</div></div>
-      <span class="pill ${m.tipo==='inicial'?'pill-blue':'pill-green'}">${m.tipo==='inicial'?'🏁 ':'+'}${m.cantEntrada} uds.</span>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        <span class="pill ${m.tipo==='inicial'?'pill-blue':'pill-green'}">${m.tipo==='inicial'?'🏁 ':'+'}${m.cantEntrada} uds.</span>
+        <button class="btn btn-ghost btn-icon" style="padding:9px 11px" onclick="almAbrirEditMov('${m._key}')" title="Editar entrada">✏️</button>
+        <button class="btn btn-danger btn-icon" style="padding:9px 11px" onclick="almEliminarMov('${m._key}')" title="Eliminar entrada">🗑</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -2574,10 +2990,14 @@ function _almSalidasListHtml(){
   return lista.map(m=>{
     const p=getProd(m.prodId);
     const dinero=(m.efectivo||0)+(m.qr||0);
-    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--border)">
-      <div style="min-width:0"><div style="font-weight:700;font-size:13px">${p?p.emoji+' '+p.nombre:m.prodId} ×${m.cantSalida}</div>
+    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
+      <div style="min-width:0;flex:1"><div style="font-weight:700;font-size:13px">${p?p.emoji+' '+p.nombre:m.prodId} ×${m.cantSalida} ${_almEditadoTag(m)}</div>
       <div style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap">${_fBo(m.fecha)} ${m.hora||''} ${_almPill(m.tipo)}${m.nota?' · '+m.nota:''}</div></div>
-      <div style="text-align:right;white-space:nowrap"><div style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--teal-dark)">${dinero>0?fmt(dinero):'—'}</div>${dinero>0?`<div style="font-size:10px;color:var(--muted)">💵 ${(m.efectivo||0).toFixed(2)} · 📱 ${(m.qr||0).toFixed(2)}</div>`:''}</div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        <div style="text-align:right;white-space:nowrap"><div style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--teal-dark)">${dinero>0?fmt(dinero):'—'}</div>${dinero>0?`<div style="font-size:10px;color:var(--muted)">💵 ${(m.efectivo||0).toFixed(2)} · 📱 ${(m.qr||0).toFixed(2)}</div>`:''}</div>
+        <button class="btn btn-ghost btn-icon" style="padding:9px 11px" onclick="almAbrirEditMov('${m._key}')" title="Editar salida">✏️</button>
+        <button class="btn btn-danger btn-icon" style="padding:9px 11px" onclick="almEliminarMov('${m._key}')" title="Eliminar salida">🗑</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -2707,14 +3127,16 @@ function almListaEgresos(){
     const estado=e.estado||'pendiente';
     return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
-        <div style="min-width:0;flex:1"><div style="font-weight:700;font-size:13px">${e.descripcion||'—'}</div>
+        <div style="min-width:0;flex:1"><div style="font-weight:700;font-size:13px">${e.descripcion||'—'} ${_almEditadoTag(e)}</div>
         <div style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px">${_fBo(e.fecha)} ${e.hora||''} ${_almEgresoPill(estado)}</div></div>
         <span style="font-family:'JetBrains Mono',monospace;font-weight:800;color:var(--red)">-${fmt(e.monto||0)}</span>
       </div>
-      ${estado==='pendiente'?`<div class="btn-row" style="margin-top:8px">
-        <button class="btn btn-teal btn-sm" onclick="almSetEgresoEstado('${e._key}','validado')">✅ Validar</button>
-        <button class="btn btn-ghost btn-sm" onclick="almSetEgresoEstado('${e._key}','observado')">⚠️ Observar</button>
-      </div>`:`<div class="btn-row" style="margin-top:8px"><button class="btn btn-ghost btn-sm" onclick="almSetEgresoEstado('${e._key}','pendiente')">↺ Volver a pendiente</button></div>`}
+      <div class="btn-row" style="margin-top:8px">
+        ${estado==='pendiente'?`<button class="btn btn-teal btn-sm" onclick="almSetEgresoEstado('${e._key}','validado')">✅ Validar</button>
+        <button class="btn btn-ghost btn-sm" onclick="almSetEgresoEstado('${e._key}','observado')">⚠️ Observar</button>`:`<button class="btn btn-ghost btn-sm" onclick="almSetEgresoEstado('${e._key}','pendiente')">↺ Volver a pendiente</button>`}
+        <button class="btn btn-ghost btn-icon" style="padding:9px 11px" onclick="almAbrirEditEgreso('${e._key}')" title="Editar egreso">✏️</button>
+        <button class="btn btn-danger btn-icon" style="padding:9px 11px" onclick="almEliminarEgreso('${e._key}')" title="Eliminar egreso">🗑</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -2742,6 +3164,160 @@ function almSetEgresoEstado(key,estado){
     toast(estado==='validado'?'✅ Egreso validado':estado==='observado'?'⚠️ Egreso marcado como observado':'↺ Egreso vuelto a pendiente');
     _almFetch().then(()=>almListaEgresos());
   }).catch(()=>toast('❌ Error al actualizar el estado'));
+}
+
+// ── Editar / eliminar registros de Mi Almacén ────────────────────────────────
+// El kardex y los saldos se recalculan desde cero en cada _almFetch, así que
+// editar o borrar un movimiento recalcula todo sin ajustes dobles. Los cuadres
+// guardados NO se tocan: son registros históricos del momento del arqueo.
+let _almEditKey=null,_almEditEgresoKey=null;
+
+function _almMovByKey(key){return _almMovs.find(m=>m._key===key);}
+
+// Refresca las vistas visibles del módulo tras una edición/eliminación
+function _almRefreshVistas(){
+  if(currentPage!=='mi-almacen')return;
+  const en=document.getElementById('alm-en-list');if(en)en.innerHTML=_almEntradasListHtml();
+  const sa=document.getElementById('alm-sa-list');if(sa)sa.innerHTML=_almSalidasListHtml();
+  if(document.getElementById('alm-eg-list'))almListaEgresos();
+  if(document.getElementById('alm-res-body'))almRenderResumenDia();
+  if(document.getElementById('alm-kdx-body'))almRenderKardex();
+  if(_almTab==='inventario'){const b=document.getElementById('alm-body');if(b)_almViewInventario(b);}
+}
+
+function almAbrirEditMov(key){
+  if(!_almGuard())return;
+  const m=_almMovByKey(key);
+  if(!m){toast('❌ Movimiento no encontrado');return;}
+  _almEditKey=key;
+  const esEntrada=m.tipo==='entrada'||m.tipo==='inicial';
+  const hoy=todayStr();
+  document.getElementById('alm-em-titulo').textContent=m.tipo==='inicial'?'✏️ Editar inventario inicial':esEntrada?'✏️ Editar entrada — Mi Almacén':'✏️ Editar salida — Mi Almacén';
+  const fechaEl=document.getElementById('alm-em-fecha');
+  fechaEl.max=hoy;fechaEl.value=m.fecha||hoy;
+  const prodSel=document.getElementById('alm-em-prod');
+  prodSel.innerHTML=PRODUCTOS.map(p=>`<option value="${p.id}">${p.emoji} ${p.nombre}</option>`).join('');
+  prodSel.value=m.prodId||'';
+  document.getElementById('alm-em-cant').value=esEntrada?(m.cantEntrada||0):(m.cantSalida||0);
+  document.getElementById('alm-em-entrada-campos').style.display=m.tipo==='entrada'?'grid':'none';
+  document.getElementById('alm-em-salida-campos').style.display=esEntrada?'none':'block';
+  if(m.tipo==='entrada'){
+    document.getElementById('alm-em-origen').value=m.origen||'Producción';
+    document.getElementById('alm-em-lote').value=m.lote||'';
+  }
+  if(!esEntrada){
+    document.getElementById('alm-em-tipo').value=m.tipo;
+    document.getElementById('alm-em-ef').value=m.efectivo||0;
+    document.getElementById('alm-em-qr').value=m.qr||0;
+  }
+  document.getElementById('alm-em-nota').value=m.nota||'';
+  document.getElementById('almEditMovOverlay').classList.add('open');
+}
+
+function almGuardarEditMov(){
+  if(!_almGuard())return;
+  const m=_almMovByKey(_almEditKey);
+  if(!m){toast('❌ Movimiento no encontrado');return;}
+  const esEntrada=m.tipo==='entrada'||m.tipo==='inicial';
+  const fecha=document.getElementById('alm-em-fecha').value;
+  const prodId=document.getElementById('alm-em-prod').value;
+  const cant=parseInt(document.getElementById('alm-em-cant').value,10);
+  const nota=document.getElementById('alm-em-nota').value.trim();
+  if(!fecha){toast('⚠️ Seleccioná la fecha');return;}
+  if(!prodId){toast('⚠️ Seleccioná un producto');return;}
+  if(!Number.isInteger(cant)||cant<=0){toast('⚠️ La cantidad debe ser un entero mayor a 0');return;}
+  const now=new Date();
+  const upd={fecha,prodId,nota,editado:true,editadoFecha:todayStr(),editadoHora:now.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'})};
+  if(esEntrada){
+    upd.cantEntrada=cant;upd.cantSalida=0;
+    if(m.tipo==='entrada'){
+      const origen=document.getElementById('alm-em-origen').value.trim()||'Producción';
+      const lote=document.getElementById('alm-em-lote').value.trim();
+      upd.origen=origen;upd.lote=lote;
+      upd.detalle='Entrada desde '+origen+(lote?' · Lote '+lote:'');
+    }
+  }else{
+    const tipo=document.getElementById('alm-em-tipo').value;
+    const ef=parseFloat(document.getElementById('alm-em-ef').value)||0;
+    const qr=parseFloat(document.getElementById('alm-em-qr').value)||0;
+    if(ef<0||qr<0){toast('⚠️ Los montos no pueden ser negativos');return;}
+    upd.tipo=tipo;upd.cantEntrada=0;upd.cantSalida=cant;upd.efectivo=ef;upd.qr=qr;
+    upd.detalle=(ALM_TIPO_LBL[tipo]||tipo)+' ×'+cant;
+  }
+  // Simular saldos con la edición aplicada y advertir (sin bloquear) si queda negativo
+  const saldoSim={};
+  _almMovs.forEach(x=>{
+    const esEste=x._key===_almEditKey;
+    const pid=esEste?prodId:x.prodId;
+    const ent=esEste?(esEntrada?cant:0):(x.cantEntrada||0);
+    const sal=esEste?(esEntrada?0:cant):(x.cantSalida||0);
+    saldoSim[pid]=(saldoSim[pid]||0)+ent-sal;
+  });
+  const afectados=[...new Set([prodId,m.prodId])];
+  const negativos=afectados.filter(id=>(saldoSim[id]||0)<0);
+  if(negativos.length){
+    const nombres=negativos.map(id=>{const p=getProd(id);return(p?p.nombre:id)+' ('+saldoSim[id]+')';}).join(', ');
+    if(!confirm(`⚠️ Con esta edición el saldo queda negativo en: ${nombres}.\nSuele indicar un error de registro. ¿Guardar de todos modos?`))return;
+  }
+  db.ref('miAlmacen/movimientos/'+_almEditKey).update(upd).then(()=>{
+    closeModal('almEditMovOverlay');
+    toast('✏️ Movimiento actualizado — saldos recalculados');
+    _almFetch().then(_almRefreshVistas);
+  }).catch(()=>toast('❌ Error al guardar los cambios'));
+}
+
+function almEliminarMov(key){
+  if(!_almGuard())return;
+  const m=_almMovByKey(key);
+  if(!m){toast('❌ Movimiento no encontrado');return;}
+  const p=getProd(m.prodId);
+  const esEntrada=m.tipo==='entrada'||m.tipo==='inicial';
+  const cant=esEntrada?(m.cantEntrada||0):(m.cantSalida||0);
+  const efecto=esEntrada?`se restarán ${cant} unidades del saldo`:`volverán ${cant} unidades al saldo`;
+  if(!confirm(`¿Eliminar este movimiento de Mi Almacén?\n\n${ALM_TIPO_LBL[m.tipo]||m.tipo}: ${p?p.nombre:m.prodId} ×${cant} — ${_fBo(m.fecha)}\n\nAl eliminar, ${efecto} de ${p?p.nombre:m.prodId}. Esta acción no se puede deshacer.`))return;
+  db.ref('miAlmacen/movimientos/'+key).remove().then(()=>{
+    toast('🗑 Movimiento eliminado — saldos recalculados');
+    _almFetch().then(_almRefreshVistas);
+  }).catch(()=>toast('❌ Error al eliminar el movimiento'));
+}
+
+function almAbrirEditEgreso(key){
+  if(!_almGuard())return;
+  const e=_almEgresos.find(x=>x._key===key);
+  if(!e){toast('❌ Egreso no encontrado');return;}
+  _almEditEgresoKey=key;
+  const fechaEl=document.getElementById('alm-ee-fecha');
+  fechaEl.max=todayStr();fechaEl.value=e.fecha||todayStr();
+  document.getElementById('alm-ee-monto').value=e.monto||0;
+  document.getElementById('alm-ee-desc').value=e.descripcion||'';
+  document.getElementById('almEditEgresoOverlay').classList.add('open');
+}
+
+function almGuardarEditEgreso(){
+  if(!_almGuard())return;
+  const fecha=document.getElementById('alm-ee-fecha').value;
+  const monto=parseFloat(document.getElementById('alm-ee-monto').value)||0;
+  const desc=document.getElementById('alm-ee-desc').value.trim();
+  if(!fecha){toast('⚠️ Seleccioná la fecha');return;}
+  if(monto<=0){toast('⚠️ Ingresá el monto del egreso');return;}
+  if(!desc){toast('⚠️ La descripción es obligatoria');return;}
+  const now=new Date();
+  db.ref('miAlmacen/egresos/'+_almEditEgresoKey).update({fecha,monto,descripcion:desc,editado:true,editadoFecha:todayStr(),editadoHora:now.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'})}).then(()=>{
+    closeModal('almEditEgresoOverlay');
+    toast('✏️ Egreso actualizado');
+    _almFetch().then(_almRefreshVistas);
+  }).catch(()=>toast('❌ Error al guardar los cambios'));
+}
+
+function almEliminarEgreso(key){
+  if(!_almGuard())return;
+  const e=_almEgresos.find(x=>x._key===key);
+  if(!e){toast('❌ Egreso no encontrado');return;}
+  if(!confirm(`¿Eliminar este egreso de Mi Almacén?\n\n${e.descripcion||'—'} — ${fmt(e.monto||0)} — ${_fBo(e.fecha)}\n\nEsta acción no se puede deshacer.`))return;
+  db.ref('miAlmacen/egresos/'+key).remove().then(()=>{
+    toast('🗑 Egreso eliminado');
+    _almFetch().then(_almRefreshVistas);
+  }).catch(()=>toast('❌ Error al eliminar el egreso'));
 }
 
 // ── Resumen del día + arqueo ─────────────────────────────────────────────────
@@ -2926,7 +3502,7 @@ function almRenderKardex(){
     ${lista.map(m=>{const p=getProd(m.prodId);return `<tr>
       <td style="font-size:11px;font-family:'JetBrains Mono',monospace;white-space:nowrap">${_fBo(m.fecha)}<br><span style="color:var(--muted)">${m.hora||''}</span></td>
       ${prod?'':`<td style="font-weight:600;font-size:12px;white-space:nowrap">${p?p.emoji+' '+p.nombre:m.prodId}</td>`}
-      <td style="font-size:12px">${m.detalle||ALM_TIPO_LBL[m.tipo]||''}</td>
+      <td style="font-size:12px">${m.detalle||ALM_TIPO_LBL[m.tipo]||''}${m.editado?` <span title="Editado el ${_fBo(m.editadoFecha||'')} ${m.editadoHora||''}" style="color:var(--amber);cursor:help;font-weight:700">✎</span>`:''}</td>
       <td>${_almPill(m.tipo)}</td>
       <td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--teal-dark)">${m.cantEntrada||''}</td>
       <td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--red)">${m.cantSalida||''}</td>
@@ -3251,9 +3827,10 @@ function verDetalleGlobal(grupo,key){
   const acc=document.getElementById('detalle-acciones');
   const titulo=document.getElementById('detalle-titulo');
   const items=it.items||(it.prodId?[{prodId:it.prodId,cant:it.cant||1}]:[]);
-  const itemsHtml=items.length?items.map(i=>{const p=getProd(i.prodId);return`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span>${p?p.emoji+' '+p.nombre:i.prodId} × ${i.cant}</span><span style="font-family:'JetBrains Mono',monospace">${i.subtotal!=null?fmt(i.subtotal):''}</span></div>`;}).join(''):'';
+  const itemsHtml=items.length?items.map(i=>{const p=getProd(i.prodId);return`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span>${p?p.emoji+' '+p.nombre:i.prodId} × ${i.cant}${i.esRegalo?' <span class="pill pill-purple" style="font-size:9px;padding:1px 6px">🎁 REGALO</span>':''}</span><span style="font-family:'JetBrains Mono',monospace">${i.subtotal!=null?fmt(i.subtotal):''}</span></div>`;}).join(''):'';
   let desglose='';
-  if(it.metodo==='MixtoEfectivoQR'&&(it.montoEfectivo||it.montoQR))desglose=`💵 Bs.${(it.montoEfectivo||0).toFixed(2)} + 📱 Bs.${(it.montoQR||0).toFixed(2)}`;
+  if(it.tipo==='entrega-regalia')desglose=`🎁 A cuenta de regalía: Bs.${(it.montoRegalia||0).toFixed(2)}${(it.montoEfectivo||0)>0?' + 💵 Bs.'+(it.montoEfectivo||0).toFixed(2):''}${(it.montoQR||0)>0?' + 📱 Bs.'+(it.montoQR||0).toFixed(2):''}`;
+  else if(it.metodo==='MixtoEfectivoQR'&&(it.montoEfectivo||it.montoQR))desglose=`💵 Bs.${(it.montoEfectivo||0).toFixed(2)} + 📱 Bs.${(it.montoQR||0).toFixed(2)}`;
   else if(it.metodo==='MixtoRegalia')desglose=`🎁 Bs.${(it.montoRegalia||0).toFixed(2)} + 💵 Bs.${(it.montoEfectivo||0).toFixed(2)} + 📱 Bs.${(it.montoQR||0).toFixed(2)}`;
   const filaInfo=(l,v)=>v?`<div style="display:flex;justify-content:space-between;gap:10px;padding:5px 0;font-size:13px"><span style="color:var(--muted);font-weight:600">${l}</span><span style="text-align:right">${v}</span></div>`:'';
   if(grupo==='mov'){
@@ -3435,7 +4012,9 @@ function initVentasChart(allMovs){
     const str=localDateStr(d);
     labels.push(d.toLocaleDateString('es-BO',{weekday:'short',day:'numeric'}));
     // Mismos tipos que el KPI "Ingresos" del dashboard, para que la barra coincida con la tarjeta
-    data.push(allMovs.filter(m=>m.fecha===str&&['venta','apartado','otro-ingreso','pago-deuda'].includes(m.tipo)).reduce((s,m)=>{
+    data.push(allMovs.filter(m=>m.fecha===str&&['venta','combo','apartado','otro-ingreso','pago-deuda','entrega-regalia'].includes(m.tipo)).reduce((s,m)=>{
+      // Entregas por regalía: solo suma la diferencia pagada en el momento
+      if(m.tipo==='entrega-regalia')return s+(m.montoEfectivo||0)+(m.montoQR||0);
       if(m.metodo==='MixtoEfectivoQR'||m.metodo==='MixtoRegalia')return s+(m.montoEfectivo||0)+(m.montoQR||0);
       return s+(m.total||0);
     },0));
