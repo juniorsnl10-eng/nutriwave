@@ -352,6 +352,36 @@ tbody tr:hover td{background:var(--bg)}
   </div>
 </div>
 
+<div class="overlay" id="pagoEditOverlay" onclick="closeModal('pagoEditOverlay',event)">
+  <div class="modal">
+    <div class="modal-title">✏️ Editar pago de deuda</div>
+    <div id="pagoEditInfo" style="background:var(--bg);border-radius:10px;padding:14px;margin-bottom:16px;font-size:13px;border:1px solid var(--border)"></div>
+    <div class="form-row alm-form">
+      <div class="field"><label>Monto pagado (Bs.)</label><input type="number" id="pedit-monto" min="0" step="0.01" inputmode="decimal"></div>
+      <div class="field"><label>Fecha del pago</label><input type="date" id="pedit-fecha"></div>
+    </div>
+    <div class="form-row alm-form">
+      <div class="field"><label>Método de pago</label>
+        <select id="pedit-metodo" onchange="togglePagoEditMetodo()">
+          <option value="Efectivo">💵 Efectivo</option>
+          <option value="QR">📱 QR</option>
+          <option value="MixtoEfectivoQR">💱 Mixto Ef+QR</option>
+        </select>
+      </div>
+    </div>
+    <div id="pedit-mixto-fields" class="form-row alm-form" style="display:none">
+      <div class="field"><label>Efectivo (Bs.)</label><input type="number" id="pedit-ef" min="0" step="0.01" inputmode="decimal" oninput="calcPagoEditMixto()"></div>
+      <div class="field"><label>QR (Bs.)</label><input type="number" id="pedit-qr" min="0" step="0.01" inputmode="decimal" oninput="calcPagoEditMixto()"></div>
+    </div>
+    <div class="field alm-form" style="margin-bottom:14px"><label>Nota</label><input type="text" id="pedit-nota" placeholder="opcional"></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px">ℹ️ Al guardar se recalculan el saldo y el estado de la deuda original, y los totales del día del pago.</div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="guardarEdicionPagoDeuda()" style="flex:1;justify-content:center">✓ Guardar cambios</button>
+      <button class="btn btn-ghost" onclick="closeModal('pagoEditOverlay')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="cambioOverlay" onclick="closeModal('cambioOverlay',event)">
   <div class="modal" style="max-width:540px">
     <div class="modal-title">🔄 Cambio de producto</div>
@@ -735,6 +765,20 @@ function tipoLabel(t){
 // Descripción de un ítem del carrito con marca de regalo
 function itemTag(i){return i&&i.esRegalo?' (REGALO)':'';}
 
+// Detalle legible del origen de un pago de deuda.
+// Los pagos nuevos guardan deudaFecha/deudaTotal/esParcial; para los históricos
+// se reconstruye desde la deuda original (deudaMap: {deudaKey: deuda}).
+function detallePagoDeuda(m,deudaMap){
+  const d=(deudaMap&&m.deudaId)?deudaMap[m.deudaId]:null;
+  const fechaDeuda=m.deudaFecha||(d&&d.fecha)||'';
+  const totalDeuda=m.deudaTotal!=null?m.deudaTotal:(d?d.total:null);
+  const monto=m.total||0;
+  const parcial=m.esParcial!=null?m.esParcial:(totalDeuda!=null?monto<totalDeuda-0.01:false);
+  const orig=fechaDeuda?' del '+_fBo(fechaDeuda):'';
+  if(parcial&&totalDeuda!=null)return`Pago parcial (${fmt(monto)} de ${fmt(totalDeuda)}) — deuda${orig}`;
+  return`Pago de deuda${orig}${m.nombre?' — '+m.nombre:''}`;
+}
+
 function toast(msg){
   const t=document.createElement('div');t.className='toast';t.textContent=msg;
   document.getElementById('toastWrap').appendChild(t);setTimeout(()=>t.remove(),3500);
@@ -761,18 +805,26 @@ function renderPage(page){
   if(page==='mi-almacen')renderMiAlmacen();
 }
 
+// Última fecha visible en el dashboard: al editar/eliminar se refresca ese día, no "hoy"
+let _dashFecha=null;
+
 function renderDashboard(fechaVer){
   const c=document.getElementById('appContent');
   const hoy=fechaVer||todayStr();
+  _dashFecha=hoy;
   const esHoy=hoy===todayStr();
   Promise.all([
     db.ref('movimientos').once('value'),
     db.ref('stock').once('value'),
     db.ref('entradas').once('value'),
     db.ref('apartados').once('value'),
-  ]).then(([movSnap,stockSnap,entSnap,apartSnap])=>{
+    db.ref('deudas').once('value'),
+  ]).then(([movSnap,stockSnap,entSnap,apartSnap,deudaSnap])=>{
     // Evita pisar otra página si el usuario navegó mientras cargaban los datos
     if(currentPage!=='dashboard')return;
+    // Mapa de deudas para reconstruir el origen de los pagos históricos
+    const deudaMap={};
+    deudaSnap.forEach(s=>{const v=s.val();if(v)deudaMap[s.key]=v;});
     const allMovs=[];
     movSnap.forEach(s=>{const v=s.val();if(v)allMovs.push({...v,_key:s.key});});
     const movs=allMovs.filter(m=>m.fecha===hoy);
@@ -854,7 +906,8 @@ function renderDashboard(fechaVer){
         porProd[item.prodId]+=item.cant;
       });
     });
-    const movsDisplay=movs.filter(m=>m.tipo!=='pago-deuda');
+    // Los pagos de deuda ahora se muestran: son ingreso real del día y deben ser trazables
+    const movsDisplay=movs.slice();
     const cambiosHoy=movs.filter(m=>m.tipo==='cambio-producto'||m.tipo==='devolucion-deuda').length;
     c.innerHTML=`${alertaBanner}
       <div style="background:#fff;border:1.5px solid var(--purple-mid);border-radius:12px;padding:12px 14px;margin-bottom:18px;display:flex;align-items:center;flex-wrap:wrap;gap:10px;justify-content:space-between;box-shadow:var(--shadow)">
@@ -896,14 +949,15 @@ function renderDashboard(fechaVer){
           ${movsDisplay.length?`<div class="table-wrap"><table><thead><tr><th>Hora</th><th>Socio</th><th>Tipo</th><th>Detalle</th><th>Total</th><th></th></tr></thead><tbody>
           ${movsDisplay.slice(0,20).map(m=>{
             const items=m.items||(m.prodId?[{prodId:m.prodId,cant:m.cant}]:[]);
-            const prodStr=m.tipo==='egreso'?'💸 '+(m.descripcion||m.nota||'Egreso'):m.tipo==='otro-ingreso'?'🪙 '+(m.descripcion||m.nota||'Otro ingreso'):m.tipo==='pago-deuda'?'✅ Pago deuda':items.length?items.map(i=>{const p=getProd(i.prodId);return p?p.emoji+' '+p.nombre+' ×'+i.cant+itemTag(i):'—';}).join(', '):'—';
+            const prodStr=m.tipo==='egreso'?'💸 '+(m.descripcion||m.nota||'Egreso'):m.tipo==='otro-ingreso'?'🪙 '+(m.descripcion||m.nota||'Otro ingreso'):m.tipo==='pago-deuda'?'✅ '+detallePagoDeuda(m,deudaMap)+(m.nota?' · '+m.nota:''):items.length?items.map(i=>{const p=getProd(i.prodId);return p?p.emoji+' '+p.nombre+' ×'+i.cant+itemTag(i):'—';}).join(', '):'—';
             const totalColor=m.tipo==='egreso'?'var(--red)':(m.tipo==='regalía'||m.tipo==='entrega-regalia')?'var(--purple)':'var(--teal-dark)';
             const totalStr=m.tipo==='egreso'?'-'+fmt(m.monto||m.total||0):fmt(m.total||0);
             let pagoDetalle='';
-            if(m.tipo==='entrega-regalia') pagoDetalle=`<div style="font-size:10px;color:var(--muted);margin-top:2px">🎁 Bs.${(m.montoRegalia||0).toFixed(0)} a planilla${(m.montoEfectivo||0)>0?' + 💵 Bs.'+(m.montoEfectivo||0).toFixed(0):''}${(m.montoQR||0)>0?' + 📱 Bs.'+(m.montoQR||0).toFixed(0):''}</div>`;
+            if(m.tipo==='pago-deuda') pagoDetalle=`<div style="font-size:10px;color:var(--muted);margin-top:2px">${m.metodo==='MixtoEfectivoQR'?'💵 Bs.'+(m.montoEfectivo||0).toFixed(0)+' + 📱 Bs.'+(m.montoQR||0).toFixed(0):m.metodo==='QR'?'📱 QR':'💵 Efectivo'}</div>`;
+            else if(m.tipo==='entrega-regalia') pagoDetalle=`<div style="font-size:10px;color:var(--muted);margin-top:2px">🎁 Bs.${(m.montoRegalia||0).toFixed(0)} a planilla${(m.montoEfectivo||0)>0?' + 💵 Bs.'+(m.montoEfectivo||0).toFixed(0):''}${(m.montoQR||0)>0?' + 📱 Bs.'+(m.montoQR||0).toFixed(0):''}</div>`;
             else if(m.metodo==='MixtoEfectivoQR'&&(m.montoEfectivo||m.montoQR)) pagoDetalle=`<div style="font-size:10px;color:var(--muted);margin-top:2px">💵 Bs.${(m.montoEfectivo||0).toFixed(0)} + 📱 Bs.${(m.montoQR||0).toFixed(0)}</div>`;
             else if(m.metodo==='MixtoRegalia'&&(m.montoEfectivo||m.montoQR||m.montoRegalia)) pagoDetalle=`<div style="font-size:10px;color:var(--muted);margin-top:2px">🎁 Bs.${(m.montoRegalia||0).toFixed(0)} + 💵 Bs.${(m.montoEfectivo||0).toFixed(0)} + 📱 Bs.${(m.montoQR||0).toFixed(0)}</div>`;
-            return`<tr><td style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);white-space:nowrap">${m.hora}</td><td><div style="font-weight:700;font-size:12px">${m.nombre||'—'}</div><div style="font-size:10px;color:var(--purple);font-family:'JetBrains Mono',monospace">${m.codigo||''}</div></td><td>${tipoPill(m.tipo,m.metodo)}</td><td style="font-size:11px;font-weight:500">${prodStr}</td><td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${totalColor};white-space:nowrap">${totalStr}${pagoDetalle}</td>${isAdmin()?`<td><button class="btn btn-ghost btn-icon" onclick="abrirEdicion('${m._key}')">✏️</button></td>`:'<td></td>'}</tr>`;
+            return`<tr><td style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);white-space:nowrap">${m.hora}</td><td><div style="font-weight:700;font-size:12px">${m.nombre||'—'}</div><div style="font-size:10px;color:var(--purple);font-family:'JetBrains Mono',monospace">${m.codigo||''}</div></td><td>${tipoPill(m.tipo,m.metodo)}</td><td style="font-size:11px;font-weight:500">${prodStr}</td><td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${totalColor};white-space:nowrap">${totalStr}${pagoDetalle}</td>${isAdmin()?`<td><button class="btn btn-ghost btn-icon" onclick="${m.tipo==='pago-deuda'?`abrirEdicionPagoDeuda('${m._key}')`:`abrirEdicion('${m._key}')`}">✏️</button></td>`:'<td></td>'}</tr>`;
           }).join('')}
           </tbody></table></div>`:`<div class="empty"><span class="empty-icon">📤</span><p>Sin movimientos ${esHoy?'hoy':'ese día'}</p></div>`}
         </div>
@@ -1495,7 +1549,10 @@ function loadMovimientos(){
   const filtroBuscar=(document.getElementById('filtro-buscar')?.value||'').toLowerCase().trim();
   const el=document.getElementById('mov-table');
   if(el)el.innerHTML='<div class="loading">⏳ Cargando...</div>';
-  db.ref('movimientos').once('value').then(snap=>{
+  Promise.all([db.ref('movimientos').once('value'),db.ref('deudas').once('value')]).then(([snap,deudaSnap])=>{
+    // Mapa de deudas para el detalle de origen de los pagos (incluye históricos)
+    const deudaMap={};
+    deudaSnap.forEach(s=>{const v=s.val();if(v)deudaMap[s.key]=v;});
     let movs=[];
     snap.forEach(s=>{const v=s.val();if(v)movs.push({...v,_key:s.key});});
     console.log('Total movimientos en Firebase:', movs.length);
@@ -1505,7 +1562,7 @@ function loadMovimientos(){
     movs.sort((a,b)=>((b.fecha||'')+(b.hora||'')).localeCompare((a.fecha||'')+(a.hora||'')));
     const el=document.getElementById('mov-table');if(!el)return;
     if(!movs.length){el.innerHTML='<div class="empty"><span class="empty-icon">📋</span><p>Sin movimientos.</p></div>';return;}
-    el.innerHTML=`<table><thead><tr><th>Fecha/Hora</th><th>Socio</th><th>Tipo</th><th>Detalle</th><th>Total</th><th>Nota</th>${canEdit()?'<th>Acciones</th>':''}</tr></thead><tbody>${movs.map(m=>{const items=m.items||(m.prodId?[{prodId:m.prodId,cant:m.cant}]:[]);const prodStr=m.tipo==='egreso'?'💸 '+(m.descripcion||m.nota||'Egreso'):m.tipo==='otro-ingreso'?'🪙 '+(m.descripcion||m.nota||'Otro ingreso'):items.length?items.map(i=>{const p=getProd(i.prodId);return p?p.emoji+' '+p.nombre+' ×'+i.cant+itemTag(i):'—';}).join(', '):'—';const totalColor=m.tipo==='egreso'?'var(--red)':'var(--teal-dark)';const totalStr=m.tipo==='egreso'?'-'+fmt(m.monto||m.total||0):fmt(m.total||0);const notaEditIcon=m.notaEditada?`<span title="Nota editada por ${m.notaEditPor||'—'} el ${m.notaEditFecha||''} ${m.notaEditHora||''}" style="cursor:help;font-size:11px;margin-right:3px">✏️</span>`:'';return`<tr><td style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;white-space:nowrap">${m.fecha}<br>${m.hora||''}</td><td><div style="font-weight:700">${m.nombre||'—'}</div><div style="font-size:10px;color:var(--purple);font-family:'JetBrains Mono',monospace">${m.codigo||''}</div></td><td>${tipoPill(m.tipo,m.metodo)}${m.modificadoPorCambio?'<div style="font-size:9px;color:var(--amber);margin-top:2px;font-weight:700">✏️ Modificada</div>':''}</td><td style="font-size:12px;font-weight:500">${prodStr}</td><td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${totalColor};white-space:nowrap">${totalStr}</td><td style="font-size:11px;color:var(--muted)">${notaEditIcon}${m.nota||'—'}</td>${canEdit()?`<td><div class="btn-row">${isAdmin()?`<button class="btn btn-ghost btn-icon" onclick="abrirEdicion('${m._key}')">✏️</button><button class="btn btn-danger btn-icon" onclick="eliminarMov('${m._key}')">✕</button>`:`<button class="btn btn-ghost btn-icon" onclick="abrirNotaEdicion('${m._key}')" title="Editar solo la nota / glosa">📝</button>`} ${m.tipo==='venta'?`<button class="btn btn-ghost btn-icon" onclick="abrirCambioProducto('${m._key}')" title="Cambiar producto">🔄</button>`:''}</div></td>`:''}</tr>`;}).join('')}</tbody></table>`;
+    el.innerHTML=`<table><thead><tr><th>Fecha/Hora</th><th>Socio</th><th>Tipo</th><th>Detalle</th><th>Total</th><th>Nota</th>${canEdit()?'<th>Acciones</th>':''}</tr></thead><tbody>${movs.map(m=>{const items=m.items||(m.prodId?[{prodId:m.prodId,cant:m.cant}]:[]);const prodStr=m.tipo==='egreso'?'💸 '+(m.descripcion||m.nota||'Egreso'):m.tipo==='otro-ingreso'?'🪙 '+(m.descripcion||m.nota||'Otro ingreso'):m.tipo==='pago-deuda'?'✅ '+detallePagoDeuda(m,deudaMap):items.length?items.map(i=>{const p=getProd(i.prodId);return p?p.emoji+' '+p.nombre+' ×'+i.cant+itemTag(i):'—';}).join(', '):'—';const totalColor=m.tipo==='egreso'?'var(--red)':'var(--teal-dark)';const totalStr=m.tipo==='egreso'?'-'+fmt(m.monto||m.total||0):fmt(m.total||0);const notaEditIcon=m.notaEditada?`<span title="Nota editada por ${m.notaEditPor||'—'} el ${m.notaEditFecha||''} ${m.notaEditHora||''}" style="cursor:help;font-size:11px;margin-right:3px">✏️</span>`:'';const esPago=m.tipo==='pago-deuda';return`<tr><td style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;white-space:nowrap">${m.fecha}<br>${m.hora||''}</td><td><div style="font-weight:700">${m.nombre||'—'}</div><div style="font-size:10px;color:var(--purple);font-family:'JetBrains Mono',monospace">${m.codigo||''}</div></td><td>${tipoPill(m.tipo,m.metodo)}${m.modificadoPorCambio?'<div style="font-size:9px;color:var(--amber);margin-top:2px;font-weight:700">✏️ Modificada</div>':''}${m.pagoEditado?'<div style="font-size:9px;color:var(--amber);margin-top:2px;font-weight:700">✎ editado</div>':''}</td><td style="font-size:12px;font-weight:500">${prodStr}</td><td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${totalColor};white-space:nowrap">${totalStr}</td><td style="font-size:11px;color:var(--muted)">${notaEditIcon}${m.nota||'—'}</td>${canEdit()?`<td><div class="btn-row">${isAdmin()?`<button class="btn btn-ghost btn-icon" onclick="${esPago?`abrirEdicionPagoDeuda('${m._key}')`:`abrirEdicion('${m._key}')`}" title="${esPago?'Editar pago de deuda':'Editar movimiento'}">✏️</button><button class="btn btn-danger btn-icon" onclick="eliminarMov('${m._key}')" title="${esPago?'Eliminar pago (devuelve el saldo a la deuda)':'Eliminar'}">✕</button>`:esPago?'<span style="font-size:10px;color:var(--faint)">Solo admin</span>':`<button class="btn btn-ghost btn-icon" onclick="abrirNotaEdicion('${m._key}')" title="Editar solo la nota / glosa">📝</button>`} ${m.tipo==='venta'?`<button class="btn btn-ghost btn-icon" onclick="abrirCambioProducto('${m._key}')" title="Cambiar producto">🔄</button>`:''}</div></td>`:''}</tr>`;}).join('')}</tbody></table>`;
   });
 }
 
@@ -1513,6 +1570,8 @@ function abrirEdicion(key){
   if(!isAdmin()){toast('❌ Solo el administrador puede editar movimientos');return;}
   db.ref('movimientos/'+key).once('value').then(snap=>{
     const m=snap.val();if(!m)return;
+    // Los pagos de deuda usan su modal propio, que recalcula el saldo de la deuda
+    if(m.tipo==='pago-deuda'){abrirEdicionPagoDeuda(key);return;}
     editingId=key;
     document.getElementById('edit-fecha').value=m.fecha||todayStr();
     document.getElementById('edit-hora').value=m.hora||'';
@@ -1564,7 +1623,7 @@ function guardarEdicion(){
       [`movimientos/${editingId}/nota`]:nuevaNota,
     };
     if((prev.nota||'')!==nuevaNota)_registrarEdicionNota(updates,editingId,prev.nota,nuevaNota);
-    db.ref().update(updates).then(()=>{closeModal('editOverlay');toast('✅ Movimiento actualizado');loadMovimientos();renderDashboard();}).catch(()=>toast('❌ Error al guardar los cambios'));
+    db.ref().update(updates).then(()=>{closeModal('editOverlay');toast('✅ Movimiento actualizado');loadMovimientos();renderDashboard(_dashFecha);}).catch(()=>toast('❌ Error al guardar los cambios'));
   });
 }
 
@@ -1573,6 +1632,8 @@ function abrirNotaEdicion(key){
   if(!canEdit()){toast('❌ Sin permisos para editar notas');return;}
   db.ref('movimientos/'+key).once('value').then(snap=>{
     const m=snap.val();if(!m){toast('❌ Movimiento no encontrado');return;}
+    // Los pagos de deuda solo los edita el administrador (afectan el saldo de la deuda)
+    if(m.tipo==='pago-deuda'&&!isAdmin()){toast('❌ Solo el administrador puede editar pagos de deuda');return;}
     editingNotaId=key;
     const items=m.items||(m.prodId?[{prodId:m.prodId,cant:m.cant}]:[]);
     const prodStr=m.tipo==='egreso'?'💸 '+(m.descripcion||'Egreso'):m.tipo==='otro-ingreso'?'🪙 '+(m.descripcion||'Otro ingreso'):items.map(i=>{const p=getProd(i.prodId);return p?p.emoji+' '+p.nombre+' ×'+i.cant:'—';}).join(', ')||'—';
@@ -1603,9 +1664,11 @@ function guardarNota(){
 function eliminarMov(key){
   if(!isAdmin()){toast('❌ Solo el administrador puede eliminar');return;}
   const reponeTipos=['venta','combo','entrega-regalia','regalía','degustación','deuda','apartado'];
-  if(!confirm('¿Eliminar este movimiento?'))return;
   db.ref('movimientos/'+key).once('value').then(snap=>{
     const m=snap.val();if(!m)return;
+    // Los pagos de deuda tienen su propia lógica: devuelven el saldo a la deuda original
+    if(m.tipo==='pago-deuda'){eliminarPagoDeuda(key,m);return;}
+    if(!confirm('¿Eliminar este movimiento?'))return;
     const items=m.items||[];
     const reponeStock=reponeTipos.includes(m.tipo);
     const esApartado=m.tipo==='apartado';
@@ -1638,7 +1701,7 @@ function eliminarMov(key){
       if(aSnap)aSnap.forEach(s=>{updates['apartados/'+s.key]=null;});
       if(dSnap)dSnap.forEach(s=>{updates['deudas/'+s.key]=null;});
       Object.assign(updates,updatesRpd);
-      db.ref().update(updates).then(()=>{toast('🗑 Eliminado');loadMovimientos();renderDashboard();}).catch(()=>toast('❌ Error al eliminar'));
+      db.ref().update(updates).then(()=>{toast('🗑 Eliminado');loadMovimientos();renderDashboard(_dashFecha);}).catch(()=>toast('❌ Error al eliminar'));
     });
   });
 }
@@ -1984,7 +2047,8 @@ function confirmarPago(){
     updates[`deudas/${pagoDeudaId}/saldo`]=nuevoSaldo;
     updates[`deudas/${pagoDeudaId}/estado`]=nuevoEstado;
     updates[`deudas/${pagoDeudaId}/pagos/${pagoKey}`]={fecha:fechaPago,hora,monto,metodo,montoEfectivo,montoQR,nota,registradoPor:currentRole};
-    updates['movimientos/'+db.ref('movimientos').push().key]={fecha:fechaPago,hora,nombre:d.nombre,codigo:d.codigo||'',tipo:'pago-deuda',metodo,items:d.items||[],total:monto,nota:nota||'Pago de deuda',montoEfectivo,montoQR,registradoPor:currentRole,deudaId:pagoDeudaId};
+    // El movimiento guarda el origen del ingreso para que sea trazable en dashboard, movimientos y Excel
+    updates['movimientos/'+db.ref('movimientos').push().key]={fecha:fechaPago,hora,nombre:d.nombre,codigo:d.codigo||'',tipo:'pago-deuda',metodo,items:d.items||[],total:monto,nota,montoEfectivo,montoQR,registradoPor:currentRole,deudaId:pagoDeudaId,pagoKey,deudaFecha:d.fecha||'',deudaTotal:d.total||0,esParcial:nuevoSaldo>0.009};
     db.ref().update(updates).then(()=>{
       closeModal('pagoOverlay');
       toast(nuevoEstado==='pagada'?`✅ Deuda saldada — ${fmt(monto)} recibidos`:`✅ Pago parcial de ${fmt(monto)} registrado — Saldo restante: ${fmt(nuevoSaldo)}`);
@@ -1993,20 +2057,185 @@ function confirmarPago(){
   });
 }
 
+// ── Edición / eliminación de pagos de deuda (solo admin) ────────────────────
+// El saldo de la deuda se recalcula siempre desde la suma de sus pagos, nunca
+// por deltas: así queda correcto aunque se edite o borre cualquier pago.
+function _recalcularDeuda(deudaKey){
+  return db.ref('deudas/'+deudaKey).once('value').then(s=>{
+    const d=s.val();
+    if(!d)return null;
+    const pagado=Object.values(d.pagos||{}).reduce((a,p)=>a+(p.monto||0),0);
+    const saldo=Math.max(0,parseFloat(((d.total||0)-pagado).toFixed(2)));
+    // Una deuda devuelta no vuelve a estados de cobro
+    const estado=d.estado==='devuelta'?'devuelta':(saldo<0.01?'pagada':(pagado>0.009?'parcial':'pendiente'));
+    return db.ref('deudas/'+deudaKey).update({saldo,estado}).then(()=>({saldo,estado}));
+  });
+}
+
+// Los pagos antiguos no guardaban pagoKey: se busca el pago equivalente por monto y fecha
+function _buscarPagoKey(deuda,mov){
+  if(mov.pagoKey)return mov.pagoKey;
+  const pagos=deuda&&deuda.pagos?deuda.pagos:{};
+  const found=Object.entries(pagos).find(([,p])=>Math.abs((p.monto||0)-(mov.total||0))<0.01&&p.fecha===mov.fecha);
+  return found?found[0]:null;
+}
+
+let editandoPagoId=null,_editPagoMov=null;
+
+function togglePagoEditMetodo(){
+  const mf=document.getElementById('pedit-mixto-fields');
+  if(mf)mf.style.display=document.getElementById('pedit-metodo').value==='MixtoEfectivoQR'?'grid':'none';
+}
+function calcPagoEditMixto(){
+  const ef=parseFloat(document.getElementById('pedit-ef')?.value)||0;
+  const qr=parseFloat(document.getElementById('pedit-qr')?.value)||0;
+  const el=document.getElementById('pedit-monto');
+  if(el)el.value=(ef+qr).toFixed(2);
+}
+
+function abrirEdicionPagoDeuda(movKey){
+  if(!isAdmin()){toast('❌ Solo el administrador puede editar pagos de deuda');return;}
+  db.ref('movimientos/'+movKey).once('value').then(snap=>{
+    const m=snap.val();
+    if(!m||m.tipo!=='pago-deuda'){toast('❌ Pago no encontrado');return;}
+    editandoPagoId=movKey;_editPagoMov=m;
+    const deudaRef=m.deudaId?db.ref('deudas/'+m.deudaId).once('value'):Promise.resolve(null);
+    return deudaRef.then(ds=>{
+      const d=ds?ds.val():null;
+      document.getElementById('pagoEditInfo').innerHTML=`
+        <div style="font-weight:700;font-size:14px;margin-bottom:4px">${m.nombre||'—'} <span style="font-size:11px;color:var(--purple);font-family:'JetBrains Mono',monospace">${m.codigo||''}</span></div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px">${detallePagoDeuda(m,m.deudaId&&d?{[m.deudaId]:d}:null)}</div>
+        ${d?`<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px">
+          <span>Deuda total: <strong style="font-family:'JetBrains Mono',monospace">${fmt(d.total||0)}</strong></span>
+          <span>Saldo actual: <strong style="color:var(--red);font-family:'JetBrains Mono',monospace">${fmt(d.saldo||0)}</strong></span>
+        </div>`:`<div style="font-size:12px;color:var(--amber);font-weight:600">⚠️ La deuda original ya no existe: solo se editará este registro de ingreso.</div>`}`;
+      document.getElementById('pedit-monto').value=(m.total||0).toFixed(2);
+      document.getElementById('pedit-fecha').value=m.fecha||todayStr();
+      document.getElementById('pedit-metodo').value=m.metodo||'Efectivo';
+      document.getElementById('pedit-ef').value=m.montoEfectivo||'';
+      document.getElementById('pedit-qr').value=m.montoQR||'';
+      document.getElementById('pedit-nota').value=m.nota||'';
+      togglePagoEditMetodo();
+      document.getElementById('pagoEditOverlay').classList.add('open');
+    });
+  });
+}
+
+function guardarEdicionPagoDeuda(){
+  if(!isAdmin()){toast('❌ Solo el administrador puede editar pagos de deuda');return;}
+  if(!editandoPagoId||!_editPagoMov)return;
+  const m=_editPagoMov;
+  const monto=parseFloat(document.getElementById('pedit-monto').value)||0;
+  const fecha=document.getElementById('pedit-fecha').value;
+  const metodo=document.getElementById('pedit-metodo').value;
+  const nota=document.getElementById('pedit-nota').value.trim();
+  if(monto<=0){toast('⚠️ El monto debe ser mayor a 0');return;}
+  if(!fecha){toast('⚠️ Seleccioná la fecha del pago');return;}
+  let montoEfectivo=0,montoQR=0;
+  if(metodo==='Efectivo')montoEfectivo=monto;
+  else if(metodo==='QR')montoQR=monto;
+  else{
+    montoEfectivo=parseFloat(document.getElementById('pedit-ef').value)||0;
+    montoQR=parseFloat(document.getElementById('pedit-qr').value)||0;
+    if(Math.abs(montoEfectivo+montoQR-monto)>0.02){toast('⚠️ Los montos Ef.+QR deben sumar al total pagado');return;}
+  }
+  const deudaRef=m.deudaId?db.ref('deudas/'+m.deudaId).once('value'):Promise.resolve(null);
+  deudaRef.then(ds=>{
+    const d=ds?ds.val():null;
+    if(d){
+      // El nuevo monto no puede superar lo que la deuda admite (total − otros pagos)
+      const pagoKey=_buscarPagoKey(d,m);
+      const otros=Object.entries(d.pagos||{}).filter(([k])=>k!==pagoKey).reduce((a,[,p])=>a+(p.monto||0),0);
+      if(monto>(d.total||0)-otros+0.02){toast(`⚠️ El pago supera lo que resta de la deuda (máx. ${fmt((d.total||0)-otros)})`);return;}
+    }
+    const now=new Date();
+    const updates={};
+    updates[`movimientos/${editandoPagoId}/total`]=monto;
+    updates[`movimientos/${editandoPagoId}/fecha`]=fecha;
+    updates[`movimientos/${editandoPagoId}/metodo`]=metodo;
+    updates[`movimientos/${editandoPagoId}/montoEfectivo`]=montoEfectivo;
+    updates[`movimientos/${editandoPagoId}/montoQR`]=montoQR;
+    updates[`movimientos/${editandoPagoId}/nota`]=nota;
+    updates[`movimientos/${editandoPagoId}/pagoEditado`]=true;
+    updates[`movimientos/${editandoPagoId}/pagoEditFecha`]=todayStr();
+    updates[`movimientos/${editandoPagoId}/pagoEditHora`]=now.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
+    updates[`movimientos/${editandoPagoId}/pagoEditPor`]=rolLabel();
+    let pagoKey=null;
+    if(d){
+      pagoKey=_buscarPagoKey(d,m);
+      if(pagoKey){
+        updates[`deudas/${m.deudaId}/pagos/${pagoKey}/monto`]=monto;
+        updates[`deudas/${m.deudaId}/pagos/${pagoKey}/fecha`]=fecha;
+        updates[`deudas/${m.deudaId}/pagos/${pagoKey}/metodo`]=metodo;
+        updates[`deudas/${m.deudaId}/pagos/${pagoKey}/montoEfectivo`]=montoEfectivo;
+        updates[`deudas/${m.deudaId}/pagos/${pagoKey}/montoQR`]=montoQR;
+        updates[`deudas/${m.deudaId}/pagos/${pagoKey}/nota`]=nota;
+        updates[`movimientos/${editandoPagoId}/pagoKey`]=pagoKey;
+      }
+    }
+    db.ref().update(updates)
+      .then(()=>m.deudaId&&d?_recalcularDeuda(m.deudaId):null)
+      .then(r=>{
+        closeModal('pagoEditOverlay');
+        toast(r?`✅ Pago actualizado — saldo de la deuda: ${fmt(r.saldo)} (${r.estado})`:'✅ Pago actualizado');
+        editandoPagoId=null;_editPagoMov=null;
+        if(currentPage==='movimientos')loadMovimientos();
+        else if(currentPage==='deudas')loadDeudas();
+        else if(currentPage==='dashboard')renderDashboard(_dashFecha);
+      }).catch(()=>toast('❌ Error al guardar los cambios'));
+  });
+}
+
+function eliminarPagoDeuda(movKey,mov){
+  if(!isAdmin()){toast('❌ Solo el administrador puede eliminar pagos de deuda');return;}
+  const deudaRef=mov.deudaId?db.ref('deudas/'+mov.deudaId).once('value'):Promise.resolve(null);
+  deudaRef.then(ds=>{
+    const d=ds?ds.val():null;
+    const aviso=d
+      ?`\n\nLa deuda de ${mov.nombre||'—'} recuperará ${fmt(mov.total||0)} como saldo pendiente.`
+      :'\n\n⚠️ La deuda original ya no existe: solo se eliminará este registro de ingreso.';
+    if(!confirm(`¿Eliminar este pago de deuda?\n\n${fmt(mov.total||0)} (${mov.metodo||'—'}) del ${_fBo(mov.fecha)}${aviso}\n\nEl monto dejará de sumar a los totales de ese día.`))return;
+    const updates={['movimientos/'+movKey]:null};
+    if(d){
+      const pagoKey=_buscarPagoKey(d,mov);
+      if(pagoKey)updates[`deudas/${mov.deudaId}/pagos/${pagoKey}`]=null;
+    }
+    db.ref().update(updates)
+      .then(()=>mov.deudaId&&d?_recalcularDeuda(mov.deudaId):null)
+      .then(r=>{
+        toast(r?`🗑 Pago eliminado — la deuda vuelve a ${r.estado} (saldo ${fmt(r.saldo)})`:'🗑 Pago eliminado');
+        if(currentPage==='movimientos')loadMovimientos();
+        else if(currentPage==='deudas')loadDeudas();
+        else if(currentPage==='dashboard')renderDashboard(_dashFecha);
+      }).catch(()=>toast('❌ Error al eliminar el pago'));
+  });
+}
+
 function eliminarDeuda(key,items,reponerStock){
   if(!isAdmin()){toast('❌ Solo el administrador puede eliminar');return;}
-  if(!confirm('¿Eliminar esta deuda? Esta acción no se puede deshacer.'))return;
-  db.ref('stock').once('value').then(snap=>{
+  const d=_deudasCache[key];
+  const nPagos=d&&d.pagos?Object.keys(d.pagos).length:0;
+  const montoPagos=d&&d.pagos?Object.values(d.pagos).reduce((a,p)=>a+(p.monto||0),0):0;
+  let msg='¿Eliminar esta deuda? Esta acción no se puede deshacer.';
+  if(nPagos)msg=`⚠️ Esta deuda tiene ${nPagos} pago${nPagos!==1?'s':''} registrado${nPagos!==1?'s':''} por ${fmt(montoPagos)}.\n\nAl eliminarla se borrarán también esos pagos y su ingreso dejará de contar en los totales de los días en que se cobraron.\n\n¿Eliminar la deuda y todo su historial de pagos?`;
+  if(!confirm(msg))return;
+  // Los movimientos de pago asociados se borran junto con la deuda
+  Promise.all([
+    db.ref('stock').once('value'),
+    db.ref('movimientos').once('value'),
+  ]).then(([snap,movSnap])=>{
     const stock=snap.val()||{};
     const updates={};
+    const deudaRealKey=key.startsWith('_mov_')?null:key;
     if(key.startsWith('_mov_')){
       // Registro sintético: solo existe en movimientos/
       updates['movimientos/'+key.replace('_mov_','')]=null;
     }else{
       updates['deudas/'+key]=null;
     }
+    if(deudaRealKey)movSnap.forEach(s=>{const v=s.val();if(v&&v.tipo==='pago-deuda'&&v.deudaId===deudaRealKey)updates['movimientos/'+s.key]=null;});
     if(reponerStock)_stockDelta(updates,stock,items,+1);
-    db.ref().update(updates).then(()=>{toast('🗑 Deuda eliminada');loadDeudas();});
+    db.ref().update(updates).then(()=>{toast(nPagos?`🗑 Deuda y ${nPagos} pago${nPagos!==1?'s':''} eliminados`:'🗑 Deuda eliminada');loadDeudas();}).catch(()=>toast('❌ Error al eliminar la deuda'));
   });
 }
 
@@ -2515,8 +2744,8 @@ function _buildReporteDia(fecha){
     const allEntradas=[];entSnap.forEach(s=>{const v=s.val();if(v)allEntradas.push(v);});
     const entradasDia=allEntradas.filter(e=>e.fecha===fecha);
     const allApartados=[];apSnap.forEach(s=>{const v=s.val();if(v)allApartados.push({...v,movId:v.movId});});
-    const deudasByMov={},apartByMov={};
-    deuSnap.forEach(s=>{const v=s.val();if(v&&v.movId)deudasByMov[v.movId]=v;});
+    const deudasByMov={},apartByMov={},deudasById={};
+    deuSnap.forEach(s=>{const v=s.val();if(v){deudasById[s.key]=v;if(v.movId)deudasByMov[v.movId]=v;}});
     allApartados.forEach(a=>{if(a.movId)apartByMov[a.movId]=a;});
 
     // ── KPIs (misma lógica que el dashboard) ──
@@ -2640,7 +2869,7 @@ function _buildReporteDia(fecha){
       }else if(m.tipo==='egreso'){ef=-(m.monto||m.total||0);}
       sumEf+=ef;sumQr+=qr;sumReg+=reg;
       const items=m.items||(m.prodId?[{prodId:m.prodId,cant:m.cant}]:[]);
-      const prods=m.tipo==='egreso'||m.tipo==='otro-ingreso'?(m.descripcion||m.nota||'—'):items.map(it=>{const p=getProd(it.prodId);return(p?p.nombre:it.prodId)+' x'+(it.cant||0)+itemTag(it);}).join(', ')||'—';
+      const prods=m.tipo==='egreso'||m.tipo==='otro-ingreso'?(m.descripcion||m.nota||'—'):m.tipo==='pago-deuda'?detallePagoDeuda(m,deudasById):items.map(it=>{const p=getProd(it.prodId);return(p?p.nombre:it.prodId)+' x'+(it.cant||0)+itemTag(it);}).join(', ')||'—';
       const totalMov=m.tipo==='egreso'?-(m.monto||m.total||0):(m.total||0);
       r2.push([i+1,m.hora||'',TIPO_LBL[m.tipo]||m.tipo,m.nombre||'—',m.codigo||'',prods,m.metodo||'—',ef,qr,reg,totalMov,estadoDe(m),m.nota||'',ROL_LBL[m.registradoPor]||m.registradoPor||'—']);
     });
@@ -3798,8 +4027,9 @@ function ejecutarBusquedaGlobal(){
     let html='';
     if(movs.length){
       html+=seccion('Movimientos','📋');
+      const deudaMapGs={};cache.deudas.forEach(d=>{deudaMapGs[d._key]=d;});
       html+=movs.map(m=>{
-        const det=m.tipo==='egreso'?(m.descripcion||m.nota||'Egreso'):m.tipo==='otro-ingreso'?(m.descripcion||m.nota||'Otro ingreso'):(m.items||[]).map(i=>{const p=getProd(i.prodId);return p?p.nombre+' ×'+i.cant:'';}).filter(Boolean).join(', ')||m.nota||'—';
+        const det=m.tipo==='egreso'?(m.descripcion||m.nota||'Egreso'):m.tipo==='otro-ingreso'?(m.descripcion||m.nota||'Otro ingreso'):m.tipo==='pago-deuda'?detallePagoDeuda(m,deudaMapGs):(m.items||[]).map(i=>{const p=getProd(i.prodId);return p?p.nombre+' ×'+i.cant:'';}).filter(Boolean).join(', ')||m.nota||'—';
         return fila('mov',m,`${m.nombre||'—'} ${m.codigo?'· '+m.codigo:''} ${tipoPill(m.tipo,m.metodo)}`,`${m.fecha} ${m.hora||''} · ${det}`,fmt(m.total||0),m.tipo==='egreso'?'var(--red)':'var(--teal-dark)');
       }).join('');
     }
@@ -3835,10 +4065,12 @@ function verDetalleGlobal(grupo,key){
   const filaInfo=(l,v)=>v?`<div style="display:flex;justify-content:space-between;gap:10px;padding:5px 0;font-size:13px"><span style="color:var(--muted);font-weight:600">${l}</span><span style="text-align:right">${v}</span></div>`:'';
   if(grupo==='mov'){
     titulo.textContent='🔎 Detalle del movimiento';
+    const deudaMapD={};(_gsCache.deudas||[]).forEach(d=>{deudaMapD[d._key]=d;});
     cont.innerHTML=`
       ${filaInfo('Socio',`<strong>${it.nombre||'—'}</strong> ${it.codigo?'<span style="color:var(--purple);font-family:\'JetBrains Mono\',monospace;font-size:11px">'+it.codigo+'</span>':''}`)}
       ${filaInfo('Fecha',(it.fecha||'')+' '+(it.hora||''))}
       ${filaInfo('Tipo',tipoPill(it.tipo,it.metodo))}
+      ${it.tipo==='pago-deuda'?filaInfo('Origen',detallePagoDeuda(it,deudaMapD)):''}
       ${filaInfo('Método',it.metodo||'—')}
       ${desglose?filaInfo('Desglose',desglose):''}
       ${it.descripcion?filaInfo('Descripción',it.descripcion):''}
@@ -3846,7 +4078,7 @@ function verDetalleGlobal(grupo,key){
       ${it.nota?filaInfo('Nota',(it.notaEditada?'✏️ ':'')+it.nota):''}
       ${it.notaEditada?filaInfo('Nota editada por',(it.notaEditPor||'—')+' el '+(it.notaEditFecha||'')+' '+(it.notaEditHora||'')):''}
       ${filaInfo('Registrado por',it.registradoPor||'—')}
-      ${itemsHtml?`<div style="margin-top:10px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted)">Productos</div>${itemsHtml}`:''}`;
+      ${itemsHtml?`<div style="margin-top:10px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted)">${it.tipo==='pago-deuda'?'Productos de la deuda original':'Productos'}</div>${itemsHtml}`:''}`;
     acc.innerHTML=`<button class="btn btn-primary btn-sm" onclick="irADetalle('movimientos','${(it.codigo||it.nombre||'').replace(/'/g,'')}','${it.fecha||''}')">📋 Ver en Movimientos</button><button class="btn btn-ghost btn-sm" onclick="closeModal('detalleOverlay')">Cerrar</button>`;
   }else if(grupo==='deuda'){
     titulo.textContent='🔎 Detalle de la deuda';
